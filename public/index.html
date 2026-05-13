@@ -10,9 +10,10 @@
   <body>
     <main class="shell">
       <header class="topbar">
-        <div>
+        <div class="brand-block">
           <p class="eyebrow">Public profile monitor</p>
           <h1>Spotify Tracker</h1>
+          <p class="page-summary" id="pageSummary">Waiting for collector data</p>
         </div>
         <div class="top-actions">
           <div class="status" id="status">
@@ -26,22 +27,27 @@
         <div class="metric">
           <span class="metric-label">Snapshots</span>
           <strong id="snapshotCount">0</strong>
+          <small id="snapshotMeta">observations</small>
         </div>
         <div class="metric">
           <span class="metric-label">Profile changes</span>
           <strong id="changeCount">0</strong>
+          <small id="changeMeta">list updates</small>
         </div>
         <div class="metric">
           <span class="metric-label">Active days</span>
           <strong id="activeDays">0</strong>
+          <small id="activeDaysMeta">recorded</small>
         </div>
         <div class="metric">
           <span class="metric-label">Last check</span>
           <strong id="lastCheck">Never</strong>
+          <small id="lastCheckMeta">collector status</small>
         </div>
         <div class="metric">
           <span class="metric-label">Current top artist</span>
           <strong id="currentTopArtist">Unknown</strong>
+          <small id="currentTopMeta">latest profile rank</small>
         </div>
       </section>
 
@@ -58,6 +64,7 @@
                 <select id="daySelect" aria-label="Choose day"></select>
               </div>
             </div>
+            <div class="scope-summary" id="scopeSummary">No listening-window changes recorded yet.</div>
             <div class="hour-chart" id="hourChart" aria-label="Observed profile changes by hour"></div>
           </section>
 
@@ -67,6 +74,7 @@
                 <h2>Daily History</h2>
                 <span id="historySummary">No recorded days</span>
               </div>
+              <button class="text-button" id="latestDayView" type="button">Latest day</button>
             </div>
             <div class="day-strip" id="dayStrip" aria-label="Recorded activity by day"></div>
           </section>

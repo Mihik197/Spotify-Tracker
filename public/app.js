@@ -127,6 +127,17 @@ function renderMetrics(data) {
   setText("activeDays", number.format(data.totals.activeDays ?? data.availableDays.length));
   setText("lastCheck", timeAgo(data.totals.lastObservedAt));
   setText("currentTopArtist", data.currentArtists[0]?.name ?? "Unknown");
+  setText("snapshotMeta", data.totals.firstObservedAt ? `since ${formatDayLabel(toLocalDateKey(data.totals.firstObservedAt))}` : "observations");
+  setText("changeMeta", `${number.format(data.totals.events)} timeline events`);
+  setText("activeDaysMeta", data.availableDays[0] ? `latest ${formatDayLabel(data.availableDays[0])}` : "recorded");
+  setText("lastCheckMeta", data.state.lastStatus === "error" ? "needs attention" : "collector healthy");
+  setText("currentTopMeta", data.currentArtists[1] ? `ahead of ${data.currentArtists[1].name}` : "latest profile rank");
+  setText(
+    "pageSummary",
+    data.totals.lastObservedAt
+      ? `${number.format(data.currentArtists.length)} visible artists, updated ${timeAgo(data.totals.lastObservedAt)}`
+      : "Waiting for collector data",
+  );
 }
 
 function renderControls(data) {
@@ -152,7 +163,7 @@ function renderCurrentArtists(artists) {
               ${
                 artist.imageUrl
                   ? `<img src="${escapeHtml(artist.imageUrl)}" alt="" loading="lazy">`
-                  : `<div class="artist-fallback">${index + 1}</div>`
+                  : `<div class="artist-fallback">${escapeHtml(initials(artist.name))}</div>`
               }
               <div class="artist-meta">
                 <a href="${escapeHtml(artist.url)}" target="_blank" rel="noreferrer">${escapeHtml(artist.name)}</a>
@@ -172,6 +183,7 @@ function renderHourChart(events) {
   const peak = hours.reduce((winner, item) => (item.changes > winner.changes ? item : winner), hours[0]);
   const scope = selectedDay === "overall" ? "overall" : formatDayLabel(selectedDay);
   setText("hourPeak", peak?.changes ? `${peak.label} peak, ${scope}` : `No changes, ${scope}`);
+  renderScopeSummary(hours, events);
 
   byId("hourChart").innerHTML = hours
     .map((item) => {
@@ -208,6 +220,7 @@ function renderDayStrip(data) {
               item.date,
             )}: ${item.changes} changes">
               <span class="day-stick" style="height:${height}px"></span>
+              <strong>${item.changes}</strong>
               <span>${escapeHtml(shortDayLabel(item.date))}</span>
             </button>
           `;
@@ -224,11 +237,10 @@ function renderTopArtists(events, snapshots) {
     ? artists
         .slice(0, 18)
         .map(
-          (artist) => `
+          (artist, index) => `
             <div class="artist-bar">
-              <a class="artist-name" href="${escapeHtml(artist.url)}" target="_blank" rel="noreferrer">${escapeHtml(
-                artist.name,
-              )}</a>
+              <span class="artist-index">${index + 1}</span>
+              <a class="artist-name" href="${escapeHtml(artist.url)}" target="_blank" rel="noreferrer">${escapeHtml(artist.name)}</a>
               <div class="bar-track">
                 <div class="bar-fill" style="width:${Math.max(4, (artist.observations / max) * 100)}%"></div>
               </div>
@@ -253,6 +265,7 @@ function renderTimeline(events) {
           const removed = event.removed?.map((item) => item.name).slice(0, 2).join(", ");
           return `
             <div class="event">
+              <div class="event-marker"></div>
               <strong>${escapeHtml(artist)}</strong>
               <span>${formatTime.format(new Date(event.observedAt))}</span>
               ${added ? `<span>Added: ${escapeHtml(added)}</span>` : ""}
@@ -282,6 +295,28 @@ function renderView() {
   renderTopArtists(scopedEvents, scopedSnapshots);
   renderTimeline(scopedEvents);
   renderCurrentArtists(dashboard.currentArtists);
+}
+
+function renderScopeSummary(hours, events) {
+  const activeHours = hours.filter((hour) => hour.changes > 0);
+  const total = events.length;
+  if (!activeHours.length) {
+    setText("scopeSummary", "No changes recorded in this view yet.");
+    return;
+  }
+
+  const busiest = activeHours
+    .slice()
+    .sort((a, b) => b.changes - a.changes)
+    .slice(0, 3)
+    .map((hour) => hour.label)
+    .join(", ");
+  setText(
+    "scopeSummary",
+    `${number.format(total)} public-list changes across ${activeHours.length} active hour${
+      activeHours.length === 1 ? "" : "s"
+    }. Busiest window${activeHours.length === 1 ? "" : "s"}: ${busiest}.`,
+  );
 }
 
 function getTopArtists(events, snapshots) {
@@ -357,6 +392,16 @@ function shortDayLabel(day) {
   return `${date}/${month}`;
 }
 
+function initials(name) {
+  return String(name ?? "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -392,6 +437,11 @@ byId("dayStrip").addEventListener("click", (event) => {
   const button = event.target.closest("[data-day]");
   if (!button) return;
   selectedDay = button.dataset.day;
+  renderView();
+});
+
+byId("latestDayView").addEventListener("click", () => {
+  selectedDay = dashboard?.availableDays?.[0] ?? "overall";
   renderView();
 });
 

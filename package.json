@@ -1,0 +1,20 @@
+{
+  "name": "spotify-tracker",
+  "version": "1.0.0",
+  "description": "A public Spotify profile listening activity tracker.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "build:web": "node scripts/build-static-config.js",
+    "collect": "node src/collector.js",
+    "sample": "node src/collector.js --once",
+    "start": "node src/server.js",
+    "dev": "node src/dev.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "cheerio": "^1.2.0"
+  }
+}

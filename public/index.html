@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spotify Profile Tracker</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/config.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Public profile monitor</p>
+          <h1>Spotify Tracker</h1>
+        </div>
+        <div class="top-actions">
+          <div class="status" id="status">
+            <span class="status-dot"></span>
+            <span>Loading</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="Tracker summary">
+        <div class="metric">
+          <span class="metric-label">Snapshots</span>
+          <strong id="snapshotCount">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Profile changes</span>
+          <strong id="changeCount">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Active days</span>
+          <strong id="activeDays">0</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Last check</span>
+          <strong id="lastCheck">Never</strong>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Current top artist</span>
+          <strong id="currentTopArtist">Unknown</strong>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="primary">
+          <section class="panel focus-panel">
+            <div class="section-heading">
+              <div>
+                <h2>Activity By Hour</h2>
+                <span id="hourPeak">No data</span>
+              </div>
+              <div class="view-controls" aria-label="Activity time range">
+                <button class="segmented active" id="overallView" type="button">Overall</button>
+                <select id="daySelect" aria-label="Choose day"></select>
+              </div>
+            </div>
+            <div class="hour-chart" id="hourChart" aria-label="Observed profile changes by hour"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Daily History</h2>
+                <span id="historySummary">No recorded days</span>
+              </div>
+            </div>
+            <div class="day-strip" id="dayStrip" aria-label="Recorded activity by day"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Top Observed Artists</h2>
+                <span id="artistScope">Overall ranking</span>
+              </div>
+            </div>
+            <div class="artist-bars" id="topArtists"></div>
+          </section>
+        </div>
+
+        <aside class="side">
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Recently Played Artists</h2>
+                <span id="artistCount">0 visible</span>
+              </div>
+            </div>
+            <div class="artist-list" id="currentArtists"></div>
+          </section>
+
+          <section class="panel">
+            <div class="section-heading">
+              <div>
+                <h2>Change Timeline</h2>
+                <span id="eventCount">0 events</span>
+              </div>
+            </div>
+            <div class="timeline" id="timeline"></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -147,7 +147,7 @@ h2 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1px;
   margin: 26px 0 22px;
   overflow: hidden;
@@ -533,6 +533,16 @@ select {
   border-radius: 999px;
   background: var(--green);
   box-shadow: 0 0 0 5px var(--green-soft);
+}
+
+.event.count-change .event-marker {
+  background: var(--amber);
+  box-shadow: 0 0 0 5px rgba(255, 191, 94, 0.16);
+}
+
+.event.social-change .event-marker {
+  background: #4fb3ff;
+  box-shadow: 0 0 0 5px rgba(79, 179, 255, 0.16);
 }
 
 .event strong {

@@ -57,6 +57,10 @@ function fromSnapshotRow(row) {
     changed: row.changed,
     previousHash: row.previous_hash,
     artists: row.artists ?? [],
+    profileStats: row.profile_stats ?? {},
+    profileStatsChanged: row.profile_stats_changed ?? false,
+    followerLists: row.follower_lists ?? {},
+    followerListsChanged: row.follower_lists_changed ?? false,
   };
 }
 
@@ -68,25 +72,36 @@ function fromEventRow(row) {
     artists: row.artists ?? [],
     added: row.added ?? [],
     removed: row.removed ?? [],
+    profileStats: row.profile_stats ?? null,
+    previousProfileStats: row.previous_profile_stats ?? null,
+    countChanges: row.count_changes ?? [],
+    followerListKind: row.follower_list_kind ?? null,
+    addedUsers: row.added_users ?? [],
+    removedUsers: row.removed_users ?? [],
   };
 }
 
 function buildAnalytics(snapshots, events, state = {}) {
-  const days = getAvailableDays(events, snapshots);
+  const activityEvents = events.filter(isArtistActivityEvent);
+  const days = getAvailableDays(activityEvents, snapshots);
   return {
     state,
     totals: {
       snapshots: snapshots.length,
       changes: snapshots.filter((snapshot) => snapshot.changed).length,
+      profileCountChanges: events.filter((event) => event.type === "profile_counts_changed").length,
+      profileUserChanges: events.filter((event) => isProfileUserEvent(event)).length,
       events: events.length,
       activeDays: days.length,
       firstObservedAt: snapshots[0]?.observedAt ?? null,
       lastObservedAt: snapshots.at(-1)?.observedAt ?? null,
     },
     currentArtists: state.lastArtists ?? snapshots.at(-1)?.artists ?? [],
-    topArtists: getTopArtists(events, snapshots),
-    hourlyActivity: getHourlyActivity(events),
-    dailyActivity: getDailyActivity(events),
+    profileStats: state.lastProfileStats ?? snapshots.at(-1)?.profileStats ?? {},
+    followerLists: state.lastFollowerLists ?? snapshots.at(-1)?.followerLists ?? {},
+    topArtists: getTopArtists(activityEvents, snapshots),
+    hourlyActivity: getHourlyActivity(activityEvents),
+    dailyActivity: getDailyActivity(activityEvents),
     availableDays: days,
     recentEvents: events.slice(-50).reverse(),
     recentSnapshots: snapshots.slice(-100).reverse(),
@@ -124,11 +139,18 @@ function renderStatus(state) {
 function renderMetrics(data) {
   setText("snapshotCount", number.format(data.totals.snapshots));
   setText("changeCount", number.format(data.totals.changes));
+  setText("followerCount", formatProfileCount(data.profileStats.followers));
+  setText("followingCount", formatProfileCount(data.profileStats.following));
   setText("activeDays", number.format(data.totals.activeDays ?? data.availableDays.length));
   setText("lastCheck", timeAgo(data.totals.lastObservedAt));
   setText("currentTopArtist", data.currentArtists[0]?.name ?? "Unknown");
   setText("snapshotMeta", data.totals.firstObservedAt ? `since ${formatDayLabel(toLocalDateKey(data.totals.firstObservedAt))}` : "observations");
-  setText("changeMeta", `${number.format(data.totals.events)} timeline events`);
+  setText(
+    "changeMeta",
+    `${number.format(data.totals.profileCountChanges + data.totals.profileUserChanges)} social events`,
+  );
+  setText("followerMeta", profileListMeta(data.followerLists.followers));
+  setText("followingMeta", profileListMeta(data.followerLists.following));
   setText("activeDaysMeta", data.availableDays[0] ? `latest ${formatDayLabel(data.availableDays[0])}` : "recorded");
   setText("lastCheckMeta", data.state.lastStatus === "error" ? "needs attention" : "collector healthy");
   setText("currentTopMeta", data.currentArtists[1] ? `ahead of ${data.currentArtists[1].name}` : "latest profile rank");
@@ -260,6 +282,8 @@ function renderTimeline(events) {
         .reverse()
         .slice(0, 60)
         .map((event) => {
+          if (event.type === "profile_counts_changed") return renderCountChangeEvent(event);
+          if (isProfileUserEvent(event)) return renderProfileUserEvent(event);
           const artist = event.topArtist?.name ?? "Profile list";
           const added = event.added?.map((item) => item.name).slice(0, 3).join(", ");
           const removed = event.removed?.map((item) => item.name).slice(0, 2).join(", ");
@@ -283,6 +307,7 @@ function renderView() {
     selectedDay === "overall"
       ? dashboard.events
       : dashboard.events.filter((event) => toLocalDateKey(event.observedAt) === selectedDay);
+  const scopedActivityEvents = scopedEvents.filter(isArtistActivityEvent);
   const scopedSnapshots =
     selectedDay === "overall"
       ? dashboard.snapshots
@@ -290,9 +315,9 @@ function renderView() {
 
   renderMetrics(dashboard);
   renderControls(dashboard);
-  renderHourChart(scopedEvents);
+  renderHourChart(scopedActivityEvents);
   renderDayStrip(dashboard);
-  renderTopArtists(scopedEvents, scopedSnapshots);
+  renderTopArtists(scopedActivityEvents, scopedSnapshots);
   renderTimeline(scopedEvents);
   renderCurrentArtists(dashboard.currentArtists);
 }
@@ -340,6 +365,67 @@ function incrementArtist(counts, artist, topArtist = null) {
   record.observations += 1;
   if (topArtist && (topArtist.id || topArtist.url) === key) record.topRankChanges += 1;
   counts.set(key, record);
+}
+
+function renderCountChangeEvent(event) {
+  const summary = event.countChanges?.map(formatCountChange).join(", ") || "Profile count changed";
+  return `
+    <div class="event count-change">
+      <div class="event-marker"></div>
+      <strong>Follower stats changed</strong>
+      <span>${formatTime.format(new Date(event.observedAt))}</span>
+      <span>${escapeHtml(summary)}</span>
+    </div>
+  `;
+}
+
+function renderProfileUserEvent(event) {
+  const kindLabel = event.followerListKind === "following" ? "Following" : "Followers";
+  const added = formatUserNames(event.addedUsers, 3);
+  const removed = formatUserNames(event.removedUsers, 3);
+  return `
+    <div class="event social-change">
+      <div class="event-marker"></div>
+      <strong>${kindLabel} changed</strong>
+      <span>${formatTime.format(new Date(event.observedAt))}</span>
+      ${added ? `<span>Added: ${escapeHtml(added)}</span>` : ""}
+      ${removed ? `<span>Removed: ${escapeHtml(removed)}</span>` : ""}
+    </div>
+  `;
+}
+
+function formatCountChange(change) {
+  const label = change.field === "following" ? "Following" : "Followers";
+  const sign = change.delta > 0 ? "+" : "";
+  return `${label}: ${number.format(change.previous)} -> ${number.format(change.current)} (${sign}${number.format(change.delta)})`;
+}
+
+function formatProfileCount(value) {
+  return Number.isFinite(value) ? number.format(value) : "-";
+}
+
+function isArtistActivityEvent(event) {
+  return !event.type?.startsWith("profile_");
+}
+
+function isProfileUserEvent(event) {
+  return event.type === "profile_followers_changed" || event.type === "profile_following_changed";
+}
+
+function profileListMeta(list) {
+  if (!list) return "public profile";
+  if (list.loaded) return `${number.format(list.users?.length ?? 0)} visible users`;
+  return "count only";
+}
+
+function formatUserNames(users = [], limit = 3) {
+  const names = users
+    .slice(0, limit)
+    .map((user) => user.name)
+    .filter(Boolean)
+    .join(", ");
+  const extra = users.length > limit ? ` +${number.format(users.length - limit)} more` : "";
+  return `${names}${extra}`;
 }
 
 function getHourlyActivity(events) {

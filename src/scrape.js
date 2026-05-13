@@ -22,6 +22,46 @@ export async function scrapeRecentlyPlayedArtists({ url = config.recentlyPlayedA
   };
 }
 
+export async function scrapeProfileStats({ url = config.profileUrl } = {}) {
+  const html = await renderPublicPage(url);
+  const profileStats = extractProfileStats(html);
+
+  return {
+    sourceUrl: url,
+    profileStats,
+  };
+}
+
+export async function scrapeSpotifyProfile() {
+  const recent = await scrapeRecentlyPlayedArtists();
+  const profile = await scrapeProfileStats();
+  const followerLists = {
+    followers: await scrapeProfileUsers("followers", profile.profileStats.followers),
+    following: await scrapeProfileUsers("following", profile.profileStats.following),
+  };
+
+  return {
+    ...recent,
+    profileUrl: profile.sourceUrl,
+    profileStats: profile.profileStats,
+    followerLists,
+  };
+}
+
+export async function scrapeProfileUsers(kind, expectedCount = null) {
+  const url = `${config.profileUrl.replace(/\/$/, "")}/${kind}`;
+  const html = await renderPublicPage(url);
+  const users = extractProfileUsers(html, kind);
+  const loaded = users.length > 0 || expectedCount === 0;
+
+  return {
+    sourceUrl: url,
+    expectedCount,
+    loaded,
+    users,
+  };
+}
+
 async function renderPublicPage(url) {
   const browserPath = findLocalBrowser();
   if (!browserPath) {
@@ -94,6 +134,77 @@ function extractArtists(html) {
   });
 
   return artists;
+}
+
+function extractProfileStats(html) {
+  const $ = cheerio.load(html);
+  const text = $("body").text().replace(/\s+/g, " ").trim();
+
+  return {
+    followers: parseCountBeforeLabel(text, "followers?"),
+    following: parseCountBeforeLabel(text, "following"),
+  };
+}
+
+function extractProfileUsers(html, kind) {
+  const $ = cheerio.load(html);
+  const seen = new Set();
+  const users = [];
+
+  $('a[href*="/user/"]').each((_, element) => {
+    const link = $(element);
+    const href = link.attr("href") ?? "";
+    if (href.includes(`/${kind}`) || href.includes("/followers") || href.includes("/following")) return;
+
+    const id = href.match(/\/user\/([^/?#]+)/)?.[1];
+    if (!id || seen.has(id) || id === getProfileUserId(config.profileUrl)) return;
+
+    const title = link.find("[title]").first().attr("title")?.trim() || link.attr("title")?.trim();
+    const text = link.text().replace(/\s+/g, " ").trim();
+    const name = title || text;
+    if (!name) return;
+
+    const imageUrl =
+      link.find("img").first().attr("src") ||
+      link.closest("div").find("img").first().attr("src") ||
+      link.parent().find("img").first().attr("src") ||
+      null;
+
+    seen.add(id);
+    users.push({
+      rank: users.length + 1,
+      id,
+      name,
+      url: `https://open.spotify.com/user/${id}`,
+      imageUrl,
+    });
+  });
+
+  return users;
+}
+
+function getProfileUserId(url) {
+  return String(url).match(/\/user\/([^/?#]+)/)?.[1] ?? null;
+}
+
+function parseCountBeforeLabel(text, labelPattern) {
+  const pattern = new RegExp(`([\\d,.]+\\s*[KMB]?)\\s+${labelPattern}\\b`, "i");
+  const match = text.match(pattern);
+  if (!match) return null;
+  return parseCompactNumber(match[1]);
+}
+
+function parseCompactNumber(value) {
+  const normalized = String(value ?? "").trim().replaceAll(",", "");
+  const match = normalized.match(/^([\d.]+)\s*([KMB])?$/i);
+  if (!match) return null;
+
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return null;
+
+  const multipliers = { K: 1_000, M: 1_000_000, B: 1_000_000_000 };
+  const multiplier = multipliers[match[2]?.toUpperCase()] ?? 1;
+  return Math.round(amount * multiplier);
 }
 
 function findLocalBrowser() {

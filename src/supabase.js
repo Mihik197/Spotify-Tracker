@@ -59,6 +59,10 @@ export async function insertSupabaseSnapshot(snapshot) {
         changed: snapshot.changed,
         previous_hash: snapshot.previousHash,
         artists: snapshot.artists,
+        profile_stats: snapshot.profileStats,
+        profile_stats_changed: snapshot.profileStatsChanged,
+        follower_lists: snapshot.followerLists,
+        follower_lists_changed: snapshot.followerListsChanged,
       },
     ]),
   });
@@ -76,6 +80,12 @@ export async function insertSupabaseEvents(events) {
         artists: event.artists,
         added: event.added,
         removed: event.removed,
+        profile_stats: event.profileStats,
+        previous_profile_stats: event.previousProfileStats,
+        count_changes: event.countChanges ?? [],
+        follower_list_kind: event.followerListKind,
+        added_users: event.addedUsers ?? [],
+        removed_users: event.removedUsers ?? [],
       })),
     ),
   });
@@ -103,6 +113,10 @@ function fromSnapshotRow(row) {
     changed: row.changed,
     previousHash: row.previous_hash,
     artists: row.artists ?? [],
+    profileStats: row.profile_stats ?? {},
+    profileStatsChanged: row.profile_stats_changed ?? false,
+    followerLists: row.follower_lists ?? {},
+    followerListsChanged: row.follower_lists_changed ?? false,
   };
 }
 
@@ -114,5 +128,11 @@ function fromEventRow(row) {
     artists: row.artists ?? [],
     added: row.added ?? [],
     removed: row.removed ?? [],
+    profileStats: row.profile_stats ?? null,
+    previousProfileStats: row.previous_profile_stats ?? null,
+    countChanges: row.count_changes ?? [],
+    followerListKind: row.follower_list_kind ?? null,
+    addedUsers: row.added_users ?? [],
+    removedUsers: row.removed_users ?? [],
   };
 }

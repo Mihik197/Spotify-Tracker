@@ -1,4 +1,4 @@
-import { scrapeRecentlyPlayedArtists } from "./scrape.js";
+import { scrapeSpotifyProfile } from "./scrape.js";
 import { config } from "./config.js";
 import { saveFailure, saveObservation } from "./store.js";
 
@@ -18,11 +18,16 @@ function nextDelay(failureCount = 0) {
 }
 
 async function collectOnce() {
-  const observation = await scrapeRecentlyPlayedArtists();
+  const observation = await scrapeSpotifyProfile();
   const result = await saveObservation(observation);
   const names = observation.artists.slice(0, 5).map((artist) => artist.name).join(", ");
+  const stats = observation.profileStats;
+  const profileSummary =
+    stats?.followers !== null && stats?.following !== null
+      ? `; ${stats.followers} followers, ${stats.following} following`
+      : "";
   console.log(
-    `[${observation.observedAt}] ${result.snapshot.changed ? "changed" : "same"}: ${names}`,
+    `[${observation.observedAt}] ${result.snapshot.changed ? "changed" : "same"}: ${names}${profileSummary}`,
   );
   return result;
 }

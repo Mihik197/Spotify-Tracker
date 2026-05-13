@@ -8,14 +8,17 @@ export async function buildDashboardData() {
 }
 
 export function buildAnalytics(snapshots, events, state = {}) {
+  const activityEvents = events.filter(isArtistActivityEvent);
   return {
     state,
     totals: getTotals(snapshots, events),
-    currentArtists: state.lastArtists ?? [],
-    topArtists: getTopArtists(events, snapshots),
-    hourlyActivity: getHourlyActivity(events),
-    dailyActivity: getDailyActivity(events),
-    availableDays: getAvailableDays(events, snapshots),
+    currentArtists: state.lastArtists ?? snapshots.at(-1)?.artists ?? [],
+    profileStats: state.lastProfileStats ?? snapshots.at(-1)?.profileStats ?? {},
+    followerLists: state.lastFollowerLists ?? snapshots.at(-1)?.followerLists ?? {},
+    topArtists: getTopArtists(activityEvents, snapshots),
+    hourlyActivity: getHourlyActivity(activityEvents),
+    dailyActivity: getDailyActivity(activityEvents),
+    availableDays: getAvailableDays(activityEvents, snapshots),
     recentEvents: events.slice(-50).reverse(),
     recentSnapshots: snapshots.slice(-100).reverse(),
     snapshots,
@@ -25,11 +28,14 @@ export function buildAnalytics(snapshots, events, state = {}) {
 
 function getTotals(snapshots, events) {
   const changed = snapshots.filter((snapshot) => snapshot.changed).length;
+  const profileCountChanges = events.filter((event) => event.type === "profile_counts_changed").length;
   const first = snapshots[0]?.observedAt ?? null;
   const last = snapshots.at(-1)?.observedAt ?? null;
   return {
     snapshots: snapshots.length,
     changes: changed,
+    profileCountChanges,
+    profileUserChanges: events.filter((event) => isProfileUserEvent(event)).length,
     events: events.length,
     firstObservedAt: first,
     lastObservedAt: last,
@@ -93,4 +99,12 @@ function getAvailableDays(events, snapshots) {
   for (const event of events) if (event.observedAt) days.add(event.observedAt.slice(0, 10));
   for (const snapshot of snapshots) if (snapshot.observedAt) days.add(snapshot.observedAt.slice(0, 10));
   return Array.from(days).sort().reverse();
+}
+
+function isArtistActivityEvent(event) {
+  return !event.type?.startsWith("profile_");
+}
+
+function isProfileUserEvent(event) {
+  return event.type === "profile_followers_changed" || event.type === "profile_following_changed";
 }

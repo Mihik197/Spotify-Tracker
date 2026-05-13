@@ -6,6 +6,10 @@ create table if not exists public.spotify_snapshots (
   changed boolean not null default false,
   previous_hash text,
   artists jsonb not null default '[]'::jsonb,
+  profile_stats jsonb not null default '{}'::jsonb,
+  profile_stats_changed boolean not null default false,
+  follower_lists jsonb not null default '{}'::jsonb,
+  follower_lists_changed boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -17,6 +21,12 @@ create table if not exists public.spotify_events (
   artists jsonb not null default '[]'::jsonb,
   added jsonb not null default '[]'::jsonb,
   removed jsonb not null default '[]'::jsonb,
+  profile_stats jsonb,
+  previous_profile_stats jsonb,
+  count_changes jsonb not null default '[]'::jsonb,
+  follower_list_kind text,
+  added_users jsonb not null default '[]'::jsonb,
+  removed_users jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -25,6 +35,20 @@ create table if not exists public.spotify_tracker_state (
   value jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.spotify_snapshots
+  add column if not exists profile_stats jsonb not null default '{}'::jsonb,
+  add column if not exists profile_stats_changed boolean not null default false,
+  add column if not exists follower_lists jsonb not null default '{}'::jsonb,
+  add column if not exists follower_lists_changed boolean not null default false;
+
+alter table public.spotify_events
+  add column if not exists profile_stats jsonb,
+  add column if not exists previous_profile_stats jsonb,
+  add column if not exists count_changes jsonb not null default '[]'::jsonb,
+  add column if not exists follower_list_kind text,
+  add column if not exists added_users jsonb not null default '[]'::jsonb,
+  add column if not exists removed_users jsonb not null default '[]'::jsonb;
 
 create index if not exists spotify_snapshots_observed_at_idx
   on public.spotify_snapshots (observed_at desc);

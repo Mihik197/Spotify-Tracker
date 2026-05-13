@@ -64,8 +64,16 @@ export async function saveObservation(observation) {
   await ensureStore();
   const previous = await readState();
   const hash = artistHash(observation.artists);
+  const profileStats = normalizeProfileStats(observation.profileStats);
+  const followerLists = normalizeFollowerLists(observation.followerLists, profileStats);
+  const countChanges = getProfileCountChanges(previous.lastProfileStats, profileStats);
+  const userListChanges = getProfileUserListChanges(previous.lastFollowerLists, followerLists);
   const snapshot = {
     ...observation,
+    profileStats,
+    followerLists,
+    profileStatsChanged: countChanges.length > 0,
+    followerListsChanged: userListChanges.length > 0,
     hash,
     changed: previous.lastHash !== hash,
     previousHash: previous.lastHash ?? null,
@@ -95,6 +103,37 @@ export async function saveObservation(observation) {
     });
   }
 
+  if (countChanges.length) {
+    events.push({
+      observedAt: snapshot.observedAt,
+      type: "profile_counts_changed",
+      topArtist: snapshot.artists[0] ?? null,
+      artists: snapshot.artists,
+      added: [],
+      removed: [],
+      profileStats,
+      previousProfileStats: normalizeProfileStats(previous.lastProfileStats),
+      countChanges,
+    });
+  }
+
+  for (const change of userListChanges) {
+    events.push({
+      observedAt: snapshot.observedAt,
+      type: `profile_${change.kind}_changed`,
+      topArtist: snapshot.artists[0] ?? null,
+      artists: snapshot.artists,
+      added: [],
+      removed: [],
+      profileStats,
+      previousProfileStats: normalizeProfileStats(previous.lastProfileStats),
+      countChanges: [],
+      followerListKind: change.kind,
+      addedUsers: change.added,
+      removedUsers: change.removed,
+    });
+  }
+
   if (hasSupabase()) {
     await insertSupabaseEvents(events);
   } else {
@@ -107,11 +146,96 @@ export async function saveObservation(observation) {
     lastCheckedAt: snapshot.observedAt,
     lastHash: hash,
     lastArtists: snapshot.artists,
+    lastProfileStats: profileStats,
+    lastFollowerLists: followerLists,
     lastStatus: "ok",
     lastError: null,
   });
 
   return { snapshot, events };
+}
+
+function normalizeFollowerLists(followerLists = {}, profileStats = {}) {
+  return {
+    followers: normalizeFollowerList(followerLists.followers, profileStats.followers),
+    following: normalizeFollowerList(followerLists.following, profileStats.following),
+  };
+}
+
+function normalizeFollowerList(list = {}, expectedCount = null) {
+  const users = Array.isArray(list.users) ? list.users.map(normalizeProfileUser).filter(Boolean) : [];
+  const loaded = Boolean(list.loaded) || users.length > 0 || expectedCount === 0;
+
+  return {
+    sourceUrl: list.sourceUrl ?? null,
+    expectedCount: normalizeCount(list.expectedCount ?? expectedCount),
+    loaded,
+    users,
+  };
+}
+
+function normalizeProfileUser(user) {
+  const id = user?.id || user?.url || user?.name;
+  const name = user?.name;
+  if (!id || !name) return null;
+  return {
+    rank: Number.isFinite(user.rank) ? user.rank : null,
+    id: String(user.id ?? id),
+    name,
+    url: user.url ?? `https://open.spotify.com/user/${id}`,
+    imageUrl: user.imageUrl ?? null,
+  };
+}
+
+function normalizeProfileStats(profileStats = {}) {
+  return {
+    followers: normalizeCount(profileStats.followers),
+    following: normalizeCount(profileStats.following),
+  };
+}
+
+function normalizeCount(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
+function getProfileCountChanges(previousStats, currentStats) {
+  if (!previousStats) return [];
+
+  const previous = normalizeProfileStats(previousStats);
+  const current = normalizeProfileStats(currentStats);
+
+  return ["followers", "following"]
+    .filter((field) => previous[field] !== null && current[field] !== null && previous[field] !== current[field])
+    .map((field) => ({
+      field,
+      previous: previous[field],
+      current: current[field],
+      delta: current[field] - previous[field],
+    }));
+}
+
+function getProfileUserListChanges(previousLists, currentLists) {
+  if (!previousLists) return [];
+
+  return ["followers", "following"]
+    .map((kind) => {
+      const previous = normalizeFollowerList(previousLists[kind], currentLists[kind]?.expectedCount);
+      const current = normalizeFollowerList(currentLists[kind], currentLists[kind]?.expectedCount);
+      if (!previous.loaded || !current.loaded) return null;
+
+      const previousIds = new Set(previous.users.map(profileUserKey));
+      const currentIds = new Set(current.users.map(profileUserKey));
+      const added = current.users.filter((user) => !previousIds.has(profileUserKey(user)));
+      const removed = previous.users.filter((user) => !currentIds.has(profileUserKey(user)));
+      if (!added.length && !removed.length) return null;
+
+      return { kind, added, removed };
+    })
+    .filter(Boolean);
+}
+
+function profileUserKey(user) {
+  return user.id || user.url || user.name;
 }
 
 export async function saveFailure(error) {

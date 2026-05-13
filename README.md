@@ -1,8 +1,8 @@
 # Spotify Profile Tracker
 
-Tracks a public Spotify profile's "Recently played artists" page over time and turns the observed changes into a local dashboard.
+Tracks a public Spotify profile's "Recently played artists" page over time and turns the observed changes into a local dashboard. It also records public follower/following counts and visible follower/following profile lists.
 
-This uses the public profile route, not Spotify OAuth or the Spotify Web API. It renders the public page with local Chrome/Edge, extracts artist links from the rendered DOM, and stores snapshots/events as JSONL files in `data/`.
+This uses the public profile route, not Spotify OAuth or the Spotify Web API. It renders the public pages with local Chrome/Edge, extracts artist links, profile counts, and visible social lists from the rendered DOM, and stores snapshots/events as JSONL files in `data/`.
 
 ## Run
 
@@ -46,6 +46,8 @@ Recommended free setup:
    - `service_role` key
 
 The anon key is used by the frontend for read-only dashboard data. The service-role key is only used by GitHub Actions to write collector data.
+
+If you already created the original tables, run `supabase/schema.sql` again. It includes safe `alter table ... add column if not exists` statements for the follower/following fields.
 
 ### 2. Push This Repo To GitHub
 
@@ -168,8 +170,9 @@ The dashboard has:
 - day-by-day history
 - a date picker for viewing one specific day's active times
 - top observed artists for overall history or the selected day
+- current follower/following counts from the public profile
 - current recently played artists
-- change timeline
+- change timeline, including follower/following count and visible-user changes
 
 ## Polling
 
@@ -188,6 +191,8 @@ Spotify's public page shows a ranked list of recently played artists, but it doe
 - every observed public artist list snapshot
 - when the public list changes
 - which artists were added/removed from the visible list
+- public follower/following counts, and when either count changes
+- visible public followers/following users, and who appeared/disappeared when the lists render publicly
 - the time of day those public-list changes were observed
 
 So the dashboard is an observation-based activity tracker, not a precise listening-history export.

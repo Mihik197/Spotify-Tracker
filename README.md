@@ -71,6 +71,8 @@ SUPABASE_SERVICE_ROLE_KEY=your Supabase service_role key
 
 After that, GitHub runs it every 5 minutes. GitHub Actions does not support every-minute cron reliably; 5 minutes is the practical free minimum.
 
+If GitHub's native scheduler does not fire reliably, use the Vercel trigger fallback below.
+
 ### 4. Deploy The Dashboard
 
 #### Vercel
@@ -121,6 +123,42 @@ SUPABASE_ANON_KEY=your Supabase anon public key
 3. Build command: `npm run build:web`
 4. Publish directory: `public`
 5. Deploy.
+
+### 5. Optional Reliable Cron Fallback
+
+GitHub scheduled workflows can be delayed or dropped. If scheduled runs do not appear, use an external cron service to call the deployed Vercel endpoint, which then triggers the same GitHub workflow.
+
+1. Create a fine-grained GitHub token:
+   - GitHub **Settings > Developer settings > Personal access tokens > Fine-grained tokens**
+   - Repository access: only this repo
+   - Permissions: **Actions: Read and write**, **Metadata: Read-only**
+
+2. In Vercel, add these environment variables:
+
+```text
+CRON_SECRET=make-a-long-random-string
+GITHUB_OWNER=Mihik197
+GITHUB_REPO=Spotify-Tracker
+GITHUB_WORKFLOW_ID=collect.yml
+GITHUB_WORKFLOW_REF=main
+GITHUB_DISPATCH_TOKEN=your fine-grained GitHub token
+```
+
+3. Redeploy Vercel.
+
+4. Create a free cron job at a service like cron-job.org:
+   - URL: `https://your-vercel-domain.vercel.app/api/trigger-collect`
+   - Method: `GET`
+   - Schedule: every 5 minutes
+   - Header: `Authorization: Bearer your-CRON_SECRET-value`
+
+If the cron service cannot set headers, use:
+
+```text
+https://your-vercel-domain.vercel.app/api/trigger-collect?secret=your-CRON_SECRET-value
+```
+
+This does not scrape from Vercel. It only tells GitHub Actions to run the collector.
 
 ## Dashboard Views
 

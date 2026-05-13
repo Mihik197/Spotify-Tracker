@@ -235,6 +235,11 @@ h2 {
   flex-wrap: wrap;
 }
 
+.social-tabs {
+  display: inline-flex;
+  gap: 8px;
+}
+
 .segmented,
 .text-button,
 select {
@@ -448,6 +453,14 @@ select {
   padding-right: 2px;
 }
 
+.social-list {
+  display: grid;
+  gap: 8px;
+  max-height: 430px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .artist-row {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) 34px;
@@ -456,6 +469,10 @@ select {
   min-height: 58px;
   padding: 7px 0;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.social-row {
+  min-height: 54px;
 }
 
 .artist-row:last-child {

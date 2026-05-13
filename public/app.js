@@ -1,6 +1,7 @@
 const config = window.SPOTIFY_TRACKER_CONFIG ?? {};
 let dashboard = null;
 let selectedDay = "overall";
+let selectedSocialList = "followers";
 
 const formatTime = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -199,6 +200,46 @@ function renderCurrentArtists(artists) {
     : `<p class="empty">Run the collector once to create the first observation.</p>`;
 }
 
+function renderSocialList(followerLists = {}) {
+  const list = followerLists[selectedSocialList] ?? {};
+  const users = list.users ?? [];
+  const label = selectedSocialList === "following" ? "Following" : "Followers";
+  const itemLabel = selectedSocialList === "following" ? "Following" : "Follower";
+
+  byId("followersView").classList.toggle("active", selectedSocialList === "followers");
+  byId("followingView").classList.toggle("active", selectedSocialList === "following");
+  setText(
+    "socialListSummary",
+    list.loaded
+      ? `${number.format(users.length)} visible ${selectedSocialList}`
+      : `${label} is count-only right now`,
+  );
+
+  byId("socialList").innerHTML = list.loaded
+    ? users.length
+      ? users
+          .slice(0, 60)
+          .map(
+            (user, index) => `
+              <div class="artist-row social-row">
+                ${
+                  user.imageUrl
+                    ? `<img src="${escapeHtml(user.imageUrl)}" alt="" loading="lazy">`
+                    : `<div class="artist-fallback">${escapeHtml(initials(user.name))}</div>`
+                }
+                <div class="artist-meta">
+                  <a href="${escapeHtml(user.url)}" target="_blank" rel="noreferrer">${escapeHtml(user.name)}</a>
+                  <span>${itemLabel} ${index + 1}</span>
+                </div>
+                <span class="rank">#${index + 1}</span>
+              </div>
+            `,
+          )
+          .join("")
+      : `<p class="empty">Spotify rendered this list, but no public users were visible.</p>`
+    : `<p class="empty">Spotify exposed the ${selectedSocialList} count, but did not render the public user list during the latest check.</p>`;
+}
+
 function renderHourChart(events) {
   const hours = getHourlyActivity(events);
   const max = Math.max(1, ...hours.map((item) => item.changes));
@@ -320,6 +361,7 @@ function renderView() {
   renderTopArtists(scopedActivityEvents, scopedSnapshots);
   renderTimeline(scopedEvents);
   renderCurrentArtists(dashboard.currentArtists);
+  renderSocialList(dashboard.followerLists);
 }
 
 function renderScopeSummary(hours, events) {
@@ -528,6 +570,16 @@ byId("dayStrip").addEventListener("click", (event) => {
 
 byId("latestDayView").addEventListener("click", () => {
   selectedDay = dashboard?.availableDays?.[0] ?? "overall";
+  renderView();
+});
+
+byId("followersView").addEventListener("click", () => {
+  selectedSocialList = "followers";
+  renderView();
+});
+
+byId("followingView").addEventListener("click", () => {
+  selectedSocialList = "following";
   renderView();
 });
 

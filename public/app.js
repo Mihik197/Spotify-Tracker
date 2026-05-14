@@ -245,7 +245,7 @@ function renderHourChart(events) {
   const max = Math.max(1, ...hours.map((item) => item.changes));
   const peak = hours.reduce((winner, item) => (item.changes > winner.changes ? item : winner), hours[0]);
   const scope = selectedDay === "overall" ? "overall" : formatDayLabel(selectedDay);
-  setText("hourPeak", peak?.changes ? `${peak.label} peak, ${scope}` : `No changes, ${scope}`);
+  setText("hourPeak", peak?.changes ? `${peak.label} peak, ${scope}` : `No new artists, ${scope}`);
   renderScopeSummary(hours, events);
 
   byId("hourChart").innerHTML = hours
@@ -254,7 +254,7 @@ function renderHourChart(events) {
       const label = String(item.hour).padStart(2, "0");
       const active = item.changes ? "active" : "";
       return `
-        <div class="hour-column ${active}" title="${item.label}: ${item.changes} changes">
+        <div class="hour-column ${active}" title="${item.label}: ${item.changes} new artists, ${item.updates} list updates">
           <div class="hour-value">${item.changes || ""}</div>
           <div class="hour-bar-slot">
             <div class="hour-bar" style="height:${item.changes ? Math.max(10, height) : 2}px"></div>
@@ -284,7 +284,7 @@ function renderDayStrip(data) {
           return `
             <button class="day-pill ${active}" type="button" data-day="${item.date}" title="${formatDayLabel(
               item.date,
-            )}: ${item.changes} changes">
+            )}: ${item.changes} new artists, ${item.updates} list updates">
               <span class="day-stick" style="height:${height}px"></span>
               <strong>${item.changes}</strong>
               <span>${escapeHtml(shortDayLabel(item.date))}</span>
@@ -369,9 +369,15 @@ function renderView() {
 
 function renderScopeSummary(hours, events) {
   const activeHours = hours.filter((hour) => hour.changes > 0);
-  const total = events.length;
+  const total = hours.reduce((sum, hour) => sum + hour.changes, 0);
+  const updates = events.filter((event) => event.type === "profile_changed").length;
   if (!activeHours.length) {
-    setText("scopeSummary", "No changes recorded in this view yet.");
+    setText(
+      "scopeSummary",
+      updates
+        ? `${number.format(updates)} list update${updates === 1 ? "" : "s"}, but no new artists entered the visible list.`
+        : "No new visible artists recorded in this view yet.",
+    );
     return;
   }
 
@@ -383,9 +389,11 @@ function renderScopeSummary(hours, events) {
     .join(", ");
   setText(
     "scopeSummary",
-    `${number.format(total)} public-list changes across ${activeHours.length} active hour${
+    `${number.format(total)} new visible artist${total === 1 ? "" : "s"} across ${activeHours.length} active hour${
       activeHours.length === 1 ? "" : "s"
-    }. Busiest window${activeHours.length === 1 ? "" : "s"}: ${busiest}.`,
+    }. ${number.format(updates)} list update${updates === 1 ? "" : "s"} observed. Busiest window${
+      activeHours.length === 1 ? "" : "s"
+    }: ${busiest}.`,
   );
 }
 
@@ -457,6 +465,12 @@ function isProfileUserEvent(event) {
   return event.type === "profile_followers_changed" || event.type === "profile_following_changed";
 }
 
+function getArtistActivityUnits(event) {
+  if (event.type === "initial_observation") return 0;
+  if (!Array.isArray(event.added)) return event.type === "profile_changed" ? 1 : 0;
+  return event.added.length;
+}
+
 function profileListMeta(list) {
   if (!list) return "public profile";
   if (list.loaded) return `${number.format(list.users?.length ?? 0)} visible users`;
@@ -478,10 +492,14 @@ function getHourlyActivity(events) {
     hour,
     label: `${String(hour).padStart(2, "0")}:00`,
     changes: 0,
+    updates: 0,
   }));
   for (const event of events) {
     const hour = new Date(event.observedAt).getHours();
-    if (Number.isInteger(hour) && hours[hour]) hours[hour].changes += 1;
+    if (Number.isInteger(hour) && hours[hour]) {
+      hours[hour].changes += getArtistActivityUnits(event);
+      if (event.type === "profile_changed") hours[hour].updates += 1;
+    }
   }
   return hours;
 }
@@ -491,8 +509,9 @@ function getDailyActivity(events) {
   for (const event of events) {
     const day = toLocalDateKey(event.observedAt);
     if (!day) continue;
-    const record = days.get(day) ?? { date: day, changes: 0 };
-    record.changes += 1;
+    const record = days.get(day) ?? { date: day, changes: 0, updates: 0 };
+    record.changes += getArtistActivityUnits(event);
+    if (event.type === "profile_changed") record.updates += 1;
     days.set(day, record);
   }
   return Array.from(days.values()).sort((a, b) => a.date.localeCompare(b.date));

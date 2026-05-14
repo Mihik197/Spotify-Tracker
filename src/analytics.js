@@ -74,10 +74,13 @@ function getTopArtists(events, snapshots) {
 }
 
 function getHourlyActivity(events) {
-  const hours = hourNames.map((label, hour) => ({ hour, label, changes: 0 }));
+  const hours = hourNames.map((label, hour) => ({ hour, label, changes: 0, updates: 0 }));
   for (const event of events) {
     const hour = new Date(event.observedAt).getHours();
-    if (Number.isInteger(hour) && hours[hour]) hours[hour].changes += 1;
+    if (Number.isInteger(hour) && hours[hour]) {
+      hours[hour].changes += getArtistActivityUnits(event);
+      if (event.type === "profile_changed") hours[hour].updates += 1;
+    }
   }
   return hours;
 }
@@ -87,8 +90,9 @@ function getDailyActivity(events) {
   for (const event of events) {
     const day = event.observedAt?.slice(0, 10);
     if (!day) continue;
-    const record = days.get(day) ?? { date: day, changes: 0 };
-    record.changes += 1;
+    const record = days.get(day) ?? { date: day, changes: 0, updates: 0 };
+    record.changes += getArtistActivityUnits(event);
+    if (event.type === "profile_changed") record.updates += 1;
     days.set(day, record);
   }
   return Array.from(days.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -107,4 +111,10 @@ function isArtistActivityEvent(event) {
 
 function isProfileUserEvent(event) {
   return event.type === "profile_followers_changed" || event.type === "profile_following_changed";
+}
+
+function getArtistActivityUnits(event) {
+  if (event.type === "initial_observation") return 0;
+  if (!Array.isArray(event.added)) return event.type === "profile_changed" ? 1 : 0;
+  return event.added.length;
 }

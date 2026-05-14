@@ -102,7 +102,7 @@ function getAvailableDays(events, snapshots) {
 }
 
 function isArtistActivityEvent(event) {
-  return !event.type?.startsWith("profile_");
+  return event.type === "initial_observation" || event.type === "profile_changed";
 }
 
 function isProfileUserEvent(event) {

@@ -250,12 +250,15 @@ function renderHourChart(events) {
 
   byId("hourChart").innerHTML = hours
     .map((item) => {
-      const height = Math.round((item.changes / max) * 220);
-      const label = item.hour % 3 === 0 ? String(item.hour).padStart(2, "0") : "";
+      const height = Math.round((item.changes / max) * 142);
+      const label = String(item.hour).padStart(2, "0");
+      const active = item.changes ? "active" : "";
       return `
-        <div class="hour-column" title="${item.label}: ${item.changes} changes">
+        <div class="hour-column ${active}" title="${item.label}: ${item.changes} changes">
           <div class="hour-value">${item.changes || ""}</div>
-          <div class="hour-bar" style="height:${Math.max(2, height)}px; opacity:${item.changes ? 1 : 0.22}"></div>
+          <div class="hour-bar-slot">
+            <div class="hour-bar" style="height:${item.changes ? Math.max(10, height) : 2}px"></div>
+          </div>
           <span class="hour-label">${label}</span>
         </div>
       `;

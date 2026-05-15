@@ -66,12 +66,17 @@
           <section class="panel focus-panel">
             <div class="section-heading">
               <div>
-                <h2>Activity By Hour</h2>
+                <h2>Activity Timeline</h2>
                 <span id="hourPeak">No data</span>
               </div>
               <div class="view-controls" aria-label="Activity time range">
                 <button class="segmented active" id="overallView" type="button">Overall</button>
                 <select id="daySelect" aria-label="Choose day"></select>
+                <select class="compact-select" id="bucketSelect" aria-label="Choose time bucket">
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="60">1 hour</option>
+                </select>
               </div>
             </div>
             <div class="scope-summary" id="scopeSummary">No listening-window changes recorded yet.</div>

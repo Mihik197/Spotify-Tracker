@@ -276,6 +276,10 @@ select {
   cursor: pointer;
 }
 
+.compact-select {
+  min-width: 104px;
+}
+
 .scope-summary {
   margin: 0 0 18px;
   padding: 12px 14px;
@@ -290,9 +294,9 @@ select {
 .hour-chart {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(24, minmax(26px, 1fr));
+  grid-template-columns: repeat(var(--bucket-count, 24), minmax(4px, 1fr));
   align-items: stretch;
-  gap: 3px;
+  gap: 1px;
   min-height: 230px;
   overflow-x: auto;
   padding: 18px 10px 12px;
@@ -306,7 +310,7 @@ select {
 .hour-column {
   display: grid;
   grid-template-rows: 20px 150px 18px;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   justify-items: center;
 }
@@ -314,7 +318,7 @@ select {
 .hour-value {
   min-height: 16px;
   color: var(--text);
-  font-size: 11px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   text-align: center;
   opacity: 0.72;
@@ -347,7 +351,7 @@ select {
 }
 
 .hour-column.active .hour-bar {
-  width: min(16px, 64%);
+  width: min(10px, 90%);
   background: linear-gradient(180deg, #79d8ff 0%, #28d46d 100%);
   box-shadow: 0 10px 22px rgba(40, 212, 109, 0.18);
 }
@@ -361,9 +365,13 @@ select {
 .hour-label {
   min-height: 16px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 8px;
   font-variant-numeric: tabular-nums;
   text-align: center;
+}
+
+.hour-column:not(.boundary) .hour-label {
+  opacity: 0;
 }
 
 .day-strip {

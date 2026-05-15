@@ -2,6 +2,7 @@ const config = window.SPOTIFY_TRACKER_CONFIG ?? {};
 let dashboard = null;
 let selectedDay = "overall";
 let selectedSocialList = "followers";
+let selectedBucketMinutes = 15;
 
 const formatTime = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -211,6 +212,7 @@ function renderControls(data) {
   selectedDay = data.availableDays.includes(previous) || previous === "overall" ? previous : "overall";
   select.value = selectedDay;
   byId("overallView").classList.toggle("active", selectedDay === "overall");
+  byId("bucketSelect").value = String(selectedBucketMinutes);
 }
 
 function renderCurrentArtists(artists) {
@@ -279,25 +281,27 @@ function renderSocialList(followerLists = {}) {
 }
 
 function renderHourChart(events) {
-  const hours = getHourlyActivity(events);
-  const max = Math.max(1, ...hours.map((item) => item.changes));
-  const peak = hours.reduce((winner, item) => (item.changes > winner.changes ? item : winner), hours[0]);
+  const buckets = getTimeBucketActivity(events, selectedBucketMinutes);
+  const max = Math.max(1, ...buckets.map((item) => item.changes));
+  const peak = buckets.reduce((winner, item) => (item.changes > winner.changes ? item : winner), buckets[0]);
   const scope = selectedDay === "overall" ? "overall" : formatDayLabel(selectedDay);
   setText("hourPeak", peak?.changes ? `${peak.label} peak, ${scope}` : `No new artists, ${scope}`);
-  renderScopeSummary(hours, events);
+  renderScopeSummary(buckets, events);
 
-  byId("hourChart").innerHTML = hours
+  const chart = byId("hourChart");
+  chart.style.setProperty("--bucket-count", buckets.length);
+  chart.innerHTML = buckets
     .map((item) => {
       const height = Math.round((item.changes / max) * 142);
-      const label = String(item.hour).padStart(2, "0");
       const active = item.changes ? "active" : "";
+      const boundary = item.showLabel ? "boundary" : "";
       return `
-        <div class="hour-column ${active}" title="${item.label}: ${item.changes} new artists, ${item.updates} list updates">
+        <div class="hour-column ${active} ${boundary}" title="${item.label}: ${item.changes} new artists, ${item.updates} list updates">
           <div class="hour-value">${item.changes || ""}</div>
           <div class="hour-bar-slot">
             <div class="hour-bar" style="height:${item.changes ? Math.max(10, height) : 2}px"></div>
           </div>
-          <span class="hour-label">${label}</span>
+          <span class="hour-label">${item.showLabel ? item.shortLabel : ""}</span>
         </div>
       `;
     })
@@ -409,6 +413,7 @@ function renderScopeSummary(hours, events) {
   const activeHours = hours.filter((hour) => hour.changes > 0);
   const total = hours.reduce((sum, hour) => sum + hour.changes, 0);
   const updates = events.filter((event) => event.type === "profile_changed").length;
+  const bucketLabel = selectedBucketMinutes === 60 ? "hour" : `${selectedBucketMinutes}-minute window`;
   if (!activeHours.length) {
     setText(
       "scopeSummary",
@@ -427,7 +432,7 @@ function renderScopeSummary(hours, events) {
     .join(", ");
   setText(
     "scopeSummary",
-    `${number.format(total)} new visible artist${total === 1 ? "" : "s"} across ${activeHours.length} active hour${
+    `${number.format(total)} new visible artist${total === 1 ? "" : "s"} across ${activeHours.length} active ${bucketLabel}${
       activeHours.length === 1 ? "" : "s"
     }. ${number.format(updates)} list update${updates === 1 ? "" : "s"} observed. Busiest window${
       activeHours.length === 1 ? "" : "s"
@@ -526,20 +531,44 @@ function formatUserNames(users = [], limit = 3) {
 }
 
 function getHourlyActivity(events) {
-  const hours = Array.from({ length: 24 }, (_, hour) => ({
-    hour,
-    label: `${String(hour).padStart(2, "0")}:00`,
-    changes: 0,
-    updates: 0,
-  }));
+  return getTimeBucketActivity(events, 60);
+}
+
+function getTimeBucketActivity(events, bucketMinutes = 60) {
+  const bucketCount = Math.floor((24 * 60) / bucketMinutes);
+  const buckets = Array.from({ length: bucketCount }, (_, index) => {
+    const minuteOfDay = index * bucketMinutes;
+    const hour = Math.floor(minuteOfDay / 60);
+    const minute = minuteOfDay % 60;
+    return {
+      index,
+      hour,
+      minute,
+      label: formatTimeBucketLabel(minuteOfDay),
+      shortLabel: String(hour).padStart(2, "0"),
+      showLabel: minute === 0,
+      changes: 0,
+      updates: 0,
+    };
+  });
+
   for (const event of events) {
-    const hour = new Date(event.observedAt).getHours();
-    if (Number.isInteger(hour) && hours[hour]) {
-      hours[hour].changes += getArtistActivityUnits(event);
-      if (event.type === "profile_changed") hours[hour].updates += 1;
+    const date = new Date(event.observedAt);
+    const minuteOfDay = date.getHours() * 60 + date.getMinutes();
+    const index = Math.floor(minuteOfDay / bucketMinutes);
+    if (Number.isInteger(index) && buckets[index]) {
+      buckets[index].changes += getArtistActivityUnits(event);
+      if (event.type === "profile_changed") buckets[index].updates += 1;
     }
   }
-  return hours;
+
+  return buckets;
+}
+
+function formatTimeBucketLabel(minuteOfDay) {
+  const hour = Math.floor(minuteOfDay / 60);
+  const minute = minuteOfDay % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function getDailyActivity(events) {
@@ -618,6 +647,11 @@ byId("overallView").addEventListener("click", () => {
 
 byId("daySelect").addEventListener("change", (event) => {
   selectedDay = event.target.value;
+  renderView();
+});
+
+byId("bucketSelect").addEventListener("change", (event) => {
+  selectedBucketMinutes = Number(event.target.value);
   renderView();
 });
 

@@ -184,11 +184,23 @@ SPOTIFY_TRACKER_MIN_MS=55000 SPOTIFY_TRACKER_MAX_MS=95000 npm run collect
 
 On GitHub Actions the collector runs once per workflow execution, scheduled every 5 minutes.
 
+## Snapshot Retention
+
+Events are kept forever because they are the useful activity history. To keep Supabase tidy, the collector deletes unchanged snapshots older than 30 days after each successful run. Changed snapshots, events, and current state are kept.
+
+You can change the cleanup window:
+
+```bash
+SPOTIFY_TRACKER_SNAPSHOT_RETENTION_DAYS=60 npm run collect
+```
+
+Set `SPOTIFY_TRACKER_SNAPSHOT_RETENTION_DAYS=0` to disable cleanup.
+
 ## What The Data Means
 
 Spotify's public page shows a ranked list of recently played artists, but it does not expose exact play timestamps, tracks, or listening duration. This tracker records:
 
-- every observed public artist list snapshot
+- recent public artist list snapshots, plus changed snapshots long-term
 - when the public list changes
 - which artists were added/removed from the visible list
 - public follower/following counts, and when either count changes

@@ -8,6 +8,10 @@ export function getSupabaseKey() {
   return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 }
 
+export function hasSupabaseServiceRole() {
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 export async function supabaseRequest(path, options = {}) {
   const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
   const key = getSupabaseKey();
@@ -89,6 +93,17 @@ export async function insertSupabaseEvents(events) {
       })),
     ),
   });
+}
+
+export async function pruneUnchangedSupabaseSnapshots({ olderThan }) {
+  if (!hasSupabaseServiceRole()) return;
+  await supabaseRequest(
+    `spotify_snapshots?changed=eq.false&observed_at=lt.${encodeURIComponent(olderThan)}`,
+    {
+      method: "DELETE",
+      headers: { Prefer: "return=minimal" },
+    },
+  );
 }
 
 export async function readSupabaseDataset() {

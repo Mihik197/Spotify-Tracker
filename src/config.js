@@ -10,6 +10,7 @@ export const config = {
     ),
   dataDir: new URL("../data/", import.meta.url),
   serverPort: Number(process.env.PORT ?? 4387),
+  snapshotRetentionDays: Number(process.env.SPOTIFY_TRACKER_SNAPSHOT_RETENTION_DAYS ?? 30),
   poll: {
     minMs: Number(process.env.SPOTIFY_TRACKER_MIN_MS ?? 55_000),
     maxMs: Number(process.env.SPOTIFY_TRACKER_MAX_MS ?? 95_000),

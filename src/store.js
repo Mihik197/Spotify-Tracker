@@ -7,6 +7,7 @@ import {
   hasSupabase,
   insertSupabaseEvents,
   insertSupabaseSnapshot,
+  pruneUnchangedSupabaseSnapshots,
   readSupabaseDataset,
   readSupabaseState,
   writeSupabaseState,
@@ -152,7 +153,19 @@ export async function saveObservation(observation) {
     lastError: null,
   });
 
+  await pruneOldUnchangedSnapshots();
+
   return { snapshot, events };
+}
+
+async function pruneOldUnchangedSnapshots() {
+  const retentionDays = config.snapshotRetentionDays;
+  if (!hasSupabase() || !Number.isFinite(retentionDays) || retentionDays <= 0) return;
+
+  const olderThan = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+  await pruneUnchangedSupabaseSnapshots({ olderThan }).catch((error) => {
+    console.warn(`[${new Date().toISOString()}] snapshot cleanup skipped: ${error.message}`);
+  });
 }
 
 function normalizeFollowerLists(followerLists = {}, profileStats = {}) {

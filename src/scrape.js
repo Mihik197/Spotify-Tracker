@@ -1,11 +1,10 @@
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import * as cheerio from "cheerio";
 import { config } from "./config.js";
-
-const execFileAsync = promisify(execFile);
 
 export async function scrapeRecentlyPlayedArtists({ url = config.recentlyPlayedArtistsUrl } = {}) {
   const html = await renderPublicPage(url);
@@ -68,34 +67,82 @@ async function renderPublicPage(url) {
     throw new Error("No local Chrome or Edge executable found for public page rendering.");
   }
 
-  const profileDir = wslPathToWindowsPath(
-    `/mnt/c/Users/Mihik/AppData/Local/Temp/spotify-tracker-dump-${process.pid}-${Date.now()}`,
-  );
+  const isWindowsBrowser = /\.exe$/i.test(browserPath);
+  const profileDir = await createBrowserProfileDir(isWindowsBrowser);
 
-  try {
-    const { stdout } = await execFileAsync(
+  return dumpDom(
+    browserPath,
+    [
+      "--headless=new",
+      ...browserRuntimeFlags(isWindowsBrowser),
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-features=PushMessaging,Notifications",
+      "--no-first-run",
+      "--no-default-browser-check",
+      `--user-data-dir=${profileDir}`,
+      "--virtual-time-budget=25000",
+      "--dump-dom",
+      url,
+    ],
+  );
+}
+
+function dumpDom(browserPath, args) {
+  return new Promise((resolve, reject) => {
+    execFile(
       browserPath,
-      [
-        "--headless=new",
-        "--disable-gpu",
-        "--disable-extensions",
-        "--no-first-run",
-        "--no-default-browser-check",
-        `--user-data-dir=${profileDir}`,
-        "--virtual-time-budget=15000",
-        "--dump-dom",
-        url,
-      ],
+      args,
       {
         timeout: config.poll.navigationTimeoutMs + 20_000,
         maxBuffer: 10 * 1024 * 1024,
         windowsHide: true,
       },
+      (error, stdout, stderr) => {
+        if (looksLikeHtml(stdout)) {
+          resolve(stdout);
+          return;
+        }
+
+        if (error) {
+          error.message = stderr ? `${error.message}\n${stderr}` : error.message;
+          reject(error);
+          return;
+        }
+
+        resolve(stdout);
+      },
     );
-    return stdout;
-  } finally {
-    await rm(windowsPathToWslPath(profileDir), { recursive: true, force: true }).catch(() => {});
-  }
+  });
+}
+
+function looksLikeHtml(value) {
+  return /<html[\s>]/i.test(value) || /<!doctype html/i.test(value);
+}
+
+function browserRuntimeFlags(isWindowsBrowser) {
+  if (isWindowsBrowser) return [];
+  return ["--no-sandbox", "--disable-dev-shm-usage"];
+}
+
+async function createBrowserProfileDir(isWindowsBrowser) {
+  const baseDir = isWindowsBrowser ? findWindowsTempDir() : tmpdir();
+  const profileDir = join(baseDir, "spotify-tracker-browser-profile");
+  await mkdir(profileDir, { recursive: true });
+  return isWindowsBrowser ? wslPathToWindowsPath(profileDir) : profileDir;
+}
+
+function findWindowsTempDir() {
+  const cwdUser = process.cwd().match(/^\/mnt\/c\/Users\/([^/]+)/)?.[1];
+  const candidates = [
+    process.env.SPOTIFY_TRACKER_WINDOWS_TEMP,
+    cwdUser ? `/mnt/c/Users/${cwdUser}/AppData/Local/Temp` : null,
+    process.env.USER ? `/mnt/c/Users/${process.env.USER}/AppData/Local/Temp` : null,
+    "/mnt/c/Windows/Temp",
+    tmpdir(),
+  ].filter(Boolean);
+
+  return candidates.find((path) => existsSync(path)) ?? tmpdir();
 }
 
 function extractArtists(html) {
@@ -226,9 +273,4 @@ function findLocalBrowser() {
 function wslPathToWindowsPath(path) {
   if (!path.startsWith("/mnt/")) return path;
   return path.replace(/^\/mnt\/([a-z])\//i, (_, drive) => `${drive.toUpperCase()}:\\`).replaceAll("/", "\\");
-}
-
-function windowsPathToWslPath(path) {
-  if (!/^[A-Z]:\\/i.test(path)) return path;
-  return path.replace(/^([A-Z]):\\/i, (_, drive) => `/mnt/${drive.toLowerCase()}/`).replaceAll("\\", "/");
 }

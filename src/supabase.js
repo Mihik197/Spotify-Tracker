@@ -92,17 +92,59 @@ export async function insertSupabaseEvents(events) {
 }
 
 export async function readSupabaseDataset() {
-  const [snapshots, events, state] = await Promise.all([
-    supabaseRequest("spotify_snapshots?select=*&order=observed_at.asc&limit=5000"),
-    supabaseRequest("spotify_events?select=*&order=observed_at.asc&limit=5000"),
+  const [snapshotsDesc, events, state, snapshotCount, changeCount, firstSnapshot] = await Promise.all([
+    supabaseRequest("spotify_snapshots?select=*&order=observed_at.desc&limit=5000"),
+    readSupabaseRows("spotify_events?select=*&order=observed_at.asc"),
     readSupabaseState(),
+    readSupabaseCount("spotify_snapshots"),
+    readSupabaseCount("spotify_snapshots?changed=eq.true"),
+    supabaseRequest("spotify_snapshots?select=observed_at&order=observed_at.asc&limit=1"),
   ]);
 
   return {
-    snapshots: snapshots.map(fromSnapshotRow),
+    snapshots: snapshotsDesc.map(fromSnapshotRow).reverse(),
     events: events.map(fromEventRow),
     state,
+    metadata: {
+      snapshotCount,
+      changeCount,
+      firstObservedAt: firstSnapshot[0]?.observed_at ?? null,
+      lastObservedAt: state.lastCheckedAt ?? snapshotsDesc[0]?.observed_at ?? null,
+    },
   };
+}
+
+async function readSupabaseRows(path, batchSize = 1000) {
+  const rows = [];
+  for (let offset = 0; ; offset += batchSize) {
+    const page = await supabaseRequest(addQueryParams(path, { limit: batchSize, offset }));
+    rows.push(...page);
+    if (page.length < batchSize) return rows;
+  }
+}
+
+async function readSupabaseCount(path) {
+  const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
+  const key = getSupabaseKey();
+  if (!url || !key) throw new Error("SUPABASE_URL and a Supabase key are required.");
+
+  const response = await fetch(`${url}/rest/v1/${addQueryParams(path, { select: "id", limit: 1 })}`, {
+    headers: {
+      apikey: key,
+      authorization: `Bearer ${key}`,
+      Prefer: "count=exact",
+    },
+  });
+
+  if (!response.ok) return null;
+  const range = response.headers.get("content-range") ?? "";
+  const count = Number(range.split("/").at(-1));
+  return Number.isFinite(count) ? count : null;
+}
+
+function addQueryParams(path, params) {
+  const query = new URLSearchParams(params);
+  return `${path}${path.includes("?") ? "&" : "?"}${query}`;
 }
 
 function fromSnapshotRow(row) {

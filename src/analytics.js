@@ -3,15 +3,15 @@ import { readDataset } from "./store.js";
 const hourNames = Array.from({ length: 24 }, (_, hour) => `${hour.toString().padStart(2, "0")}:00`);
 
 export async function buildDashboardData() {
-  const { snapshots, events, state } = await readDataset();
-  return buildAnalytics(snapshots, events, state);
+  const { snapshots, events, state, metadata } = await readDataset();
+  return buildAnalytics(snapshots, events, state, metadata);
 }
 
-export function buildAnalytics(snapshots, events, state = {}) {
+export function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
   const activityEvents = events.filter(isArtistActivityEvent);
   return {
     state,
-    totals: getTotals(snapshots, events),
+    totals: getTotals(snapshots, events, metadata),
     currentArtists: state.lastArtists ?? snapshots.at(-1)?.artists ?? [],
     profileStats: state.lastProfileStats ?? snapshots.at(-1)?.profileStats ?? {},
     followerLists: state.lastFollowerLists ?? snapshots.at(-1)?.followerLists ?? {},
@@ -26,13 +26,13 @@ export function buildAnalytics(snapshots, events, state = {}) {
   };
 }
 
-function getTotals(snapshots, events) {
-  const changed = snapshots.filter((snapshot) => snapshot.changed).length;
+function getTotals(snapshots, events, metadata = {}) {
+  const changed = metadata.changeCount ?? snapshots.filter((snapshot) => snapshot.changed).length;
   const profileCountChanges = events.filter((event) => event.type === "profile_counts_changed").length;
-  const first = snapshots[0]?.observedAt ?? null;
-  const last = snapshots.at(-1)?.observedAt ?? null;
+  const first = metadata.firstObservedAt ?? snapshots[0]?.observedAt ?? null;
+  const last = metadata.lastObservedAt ?? snapshots.at(-1)?.observedAt ?? null;
   return {
-    snapshots: snapshots.length,
+    snapshots: metadata.snapshotCount ?? snapshots.length,
     changes: changed,
     profileCountChanges,
     profileUserChanges: events.filter((event) => isProfileUserEvent(event)).length,

@@ -25,16 +25,26 @@ async function loadDashboard() {
 }
 
 async function loadSupabaseDashboard() {
-  const [snapshots, events, stateRows] = await Promise.all([
-    supabaseGet("spotify_snapshots?select=*&order=observed_at.asc&limit=5000"),
-    supabaseGet("spotify_events?select=*&order=observed_at.asc&limit=5000"),
+  const [snapshotsDesc, events, stateRows, snapshotCount, changeCount, firstSnapshots] = await Promise.all([
+    supabaseGet("spotify_snapshots?select=*&order=observed_at.desc&limit=5000"),
+    supabaseGetAll("spotify_events?select=*&order=observed_at.asc"),
     supabaseGet("spotify_tracker_state?key=eq.collector&select=value&limit=1"),
+    supabaseCount("spotify_snapshots"),
+    supabaseCount("spotify_snapshots?changed=eq.true"),
+    supabaseGet("spotify_snapshots?select=observed_at&order=observed_at.asc&limit=1"),
   ]);
+  const state = stateRows[0]?.value ?? {};
 
   return buildAnalytics(
-    snapshots.map(fromSnapshotRow),
+    snapshotsDesc.map(fromSnapshotRow).reverse(),
     events.map(fromEventRow),
-    stateRows[0]?.value ?? {},
+    state,
+    {
+      snapshotCount,
+      changeCount,
+      firstObservedAt: firstSnapshots[0]?.observed_at ?? null,
+      lastObservedAt: state.lastCheckedAt ?? snapshotsDesc[0]?.observed_at ?? null,
+    },
   );
 }
 
@@ -48,6 +58,34 @@ async function supabaseGet(path) {
   });
   if (!response.ok) throw new Error(`Supabase read failed: ${response.status}`);
   return response.json();
+}
+
+async function supabaseGetAll(path, batchSize = 1000) {
+  const rows = [];
+  for (let offset = 0; ; offset += batchSize) {
+    const page = await supabaseGet(addQueryParams(path, { limit: batchSize, offset }));
+    rows.push(...page);
+    if (page.length < batchSize) return rows;
+  }
+}
+
+async function supabaseCount(table) {
+  const base = config.supabaseUrl.replace(/\/$/, "");
+  const response = await fetch(`${base}/rest/v1/${addQueryParams(table, { select: "id", limit: 1 })}`, {
+    headers: {
+      apikey: config.supabaseAnonKey,
+      authorization: `Bearer ${config.supabaseAnonKey}`,
+      Prefer: "count=exact",
+    },
+  });
+  if (!response.ok) return null;
+  const count = Number((response.headers.get("content-range") ?? "").split("/").at(-1));
+  return Number.isFinite(count) ? count : null;
+}
+
+function addQueryParams(path, params) {
+  const query = new URLSearchParams(params);
+  return `${path}${path.includes("?") ? "&" : "?"}${query}`;
 }
 
 function fromSnapshotRow(row) {
@@ -82,20 +120,20 @@ function fromEventRow(row) {
   };
 }
 
-function buildAnalytics(snapshots, events, state = {}) {
+function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
   const activityEvents = events.filter(isArtistActivityEvent);
   const days = getAvailableDays(activityEvents, snapshots);
   return {
     state,
     totals: {
-      snapshots: snapshots.length,
-      changes: snapshots.filter((snapshot) => snapshot.changed).length,
+      snapshots: metadata.snapshotCount ?? snapshots.length,
+      changes: metadata.changeCount ?? snapshots.filter((snapshot) => snapshot.changed).length,
       profileCountChanges: events.filter((event) => event.type === "profile_counts_changed").length,
       profileUserChanges: events.filter((event) => isProfileUserEvent(event)).length,
       events: events.length,
       activeDays: days.length,
-      firstObservedAt: snapshots[0]?.observedAt ?? null,
-      lastObservedAt: snapshots.at(-1)?.observedAt ?? null,
+      firstObservedAt: metadata.firstObservedAt ?? snapshots[0]?.observedAt ?? null,
+      lastObservedAt: metadata.lastObservedAt ?? snapshots.at(-1)?.observedAt ?? null,
     },
     currentArtists: state.lastArtists ?? snapshots.at(-1)?.artists ?? [],
     profileStats: state.lastProfileStats ?? snapshots.at(-1)?.profileStats ?? {},

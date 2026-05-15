@@ -186,7 +186,7 @@ On GitHub Actions the collector runs once per workflow execution, scheduled ever
 
 ## Snapshot Retention
 
-Events are kept forever because they are the useful activity history. To keep Supabase tidy, the collector deletes unchanged snapshots older than 30 days after each successful run. Changed snapshots, events, and current state are kept.
+Events are kept forever because they are the useful activity history. To keep Supabase tidy, the collector deletes unchanged snapshots older than 10 days after each successful run. Changed snapshots, events, and current state are kept.
 
 You can change the cleanup window:
 

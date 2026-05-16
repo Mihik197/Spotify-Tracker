@@ -3,6 +3,7 @@ let dashboard = null;
 let selectedDay = "overall";
 let selectedSocialList = "followers";
 let selectedBucketMinutes = 15;
+const RECENT_WINDOW_SIZE = 5;
 
 const formatTime = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -122,7 +123,7 @@ function fromEventRow(row) {
 }
 
 function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
-  const activityEvents = events.filter(isArtistActivityEvent);
+  const activityEvents = annotateRecentActivity(events.filter(isArtistActivityEvent));
   const days = getAvailableDays(activityEvents, snapshots);
   return {
     state,
@@ -285,7 +286,7 @@ function renderHourChart(events) {
   const max = Math.max(1, ...buckets.map((item) => item.movement));
   const peak = buckets.reduce((winner, item) => (item.movement > winner.movement ? item : winner), buckets[0]);
   const scope = selectedDay === "overall" ? "overall" : formatDayLabel(selectedDay);
-  setText("hourPeak", peak?.movement ? `${peak.label} peak, ${scope}` : `No movement, ${scope}`);
+  setText("hourPeak", peak?.movement ? `${peak.label} peak, ${scope}` : `No recent activity, ${scope}`);
   renderScopeSummary(buckets, events);
 
   const chart = byId("hourChart");
@@ -296,7 +297,7 @@ function renderHourChart(events) {
       const active = item.movement ? "active" : "";
       const boundary = item.showLabel ? "boundary" : "";
       return `
-        <div class="hour-column ${active} ${boundary}" title="${item.label}: ${item.movement} movement points, ${item.changes} new artists, ${item.updates} list updates">
+        <div class="hour-column ${active} ${boundary}" title="${item.label}: ${item.movement} activity signals, ${item.changes} new visible artists, ${item.updates} list updates">
           <div class="hour-value">${item.movement || ""}</div>
           <div class="hour-bar-slot">
             <div class="hour-bar" style="height:${item.movement ? Math.max(10, height) : 2}px"></div>
@@ -327,7 +328,7 @@ function renderDayStrip(data) {
           return `
             <button class="day-pill ${active}" type="button" data-day="${item.date}" title="${formatDayLabel(
               item.date,
-            )}: ${value} movement points, ${item.changes} new artists, ${item.updates} list updates">
+            )}: ${value} activity signals, ${item.changes} new visible artists, ${item.updates} list updates">
               <span class="day-stick" style="height:${height}px"></span>
               <strong>${value}</strong>
               <span>${escapeHtml(shortDayLabel(item.date))}</span>
@@ -394,7 +395,11 @@ function renderView() {
     selectedDay === "overall"
       ? dashboard.events
       : dashboard.events.filter((event) => toLocalDateKey(event.observedAt) === selectedDay);
-  const scopedActivityEvents = scopedEvents.filter(isArtistActivityEvent);
+  const allActivityEvents = annotateRecentActivity(dashboard.events.filter(isArtistActivityEvent));
+  const scopedActivityEvents =
+    selectedDay === "overall"
+      ? allActivityEvents
+      : allActivityEvents.filter((event) => toLocalDateKey(event.observedAt) === selectedDay);
   const scopedSnapshots =
     selectedDay === "overall"
       ? dashboard.snapshots
@@ -420,8 +425,8 @@ function renderScopeSummary(hours, events) {
     setText(
       "scopeSummary",
       updates
-        ? `${number.format(updates)} list update${updates === 1 ? "" : "s"}, but no rank movement was measured.`
-        : "No public-list movement recorded in this view yet.",
+        ? `${number.format(updates)} list update${updates === 1 ? "" : "s"}, but no top-${RECENT_WINDOW_SIZE} activity was inferred.`
+        : "No public-list activity recorded in this view yet.",
     );
     return;
   }
@@ -434,7 +439,7 @@ function renderScopeSummary(hours, events) {
     .join(", ");
   setText(
     "scopeSummary",
-    `${number.format(movement)} movement point${movement === 1 ? "" : "s"} across ${activeHours.length} active ${bucketLabel}${
+    `${number.format(movement)} activity signal${movement === 1 ? "" : "s"} across ${activeHours.length} active ${bucketLabel}${
       activeHours.length === 1 ? "" : "s"
     }. ${number.format(updates)} list update${updates === 1 ? "" : "s"} observed, ${number.format(
       newArtists,
@@ -518,13 +523,37 @@ function getArtistActivityUnits(event) {
   return event.added.length;
 }
 
-function getArtistMovementUnits(event) {
-  if (event.type === "initial_observation") return 0;
+function annotateRecentActivity(events) {
+  let previousArtists = [];
+  return events.map((event) => {
+    const recentActivityUnits = getRecentActivityUnits(event, previousArtists);
+    if (Array.isArray(event.artists) && event.artists.length) previousArtists = event.artists;
+    return { ...event, recentActivityUnits };
+  });
+}
+
+function getRecentActivityUnits(event, previousArtists = []) {
   if (event.type !== "profile_changed") return 0;
-  const added = Array.isArray(event.added) ? event.added.length : 0;
-  const removed = Array.isArray(event.removed) ? event.removed.length : 0;
-  const topArtistMoved = event.topArtist ? 1 : 0;
-  return Math.max(1, added + removed + topArtistMoved);
+  const currentTop = (event.artists ?? []).slice(0, RECENT_WINDOW_SIZE);
+  if (!currentTop.length) return event.topArtist ? 1 : 0;
+
+  const previousRank = new Map();
+  previousArtists.forEach((artist, index) => previousRank.set(artistKey(artist), index));
+
+  let units = 0;
+  for (let index = 0; index < currentTop.length; index += 1) {
+    const previousIndex = previousRank.get(artistKey(currentTop[index]));
+    if (previousIndex === undefined || previousIndex > index) units += 1;
+  }
+  return units;
+}
+
+function getRecentActivityUnitsFromEvent(event) {
+  return Number.isFinite(event.recentActivityUnits) ? event.recentActivityUnits : getArtistActivityUnits(event);
+}
+
+function artistKey(artist) {
+  return artist?.id || artist?.url || artist?.name || "";
 }
 
 function profileListMeta(list) {
@@ -572,7 +601,7 @@ function getTimeBucketActivity(events, bucketMinutes = 60) {
     const index = Math.floor(minuteOfDay / bucketMinutes);
     if (Number.isInteger(index) && buckets[index]) {
       buckets[index].changes += getArtistActivityUnits(event);
-      buckets[index].movement += getArtistMovementUnits(event);
+      buckets[index].movement += getRecentActivityUnitsFromEvent(event);
       if (event.type === "profile_changed") buckets[index].updates += 1;
     }
   }
@@ -593,7 +622,7 @@ function getDailyActivity(events) {
     if (!day) continue;
     const record = days.get(day) ?? { date: day, changes: 0, updates: 0 };
     record.changes += getArtistActivityUnits(event);
-    record.movement = (record.movement ?? 0) + getArtistMovementUnits(event);
+    record.movement = (record.movement ?? 0) + getRecentActivityUnitsFromEvent(event);
     if (event.type === "profile_changed") record.updates += 1;
     days.set(day, record);
   }

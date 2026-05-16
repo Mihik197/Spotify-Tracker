@@ -1,6 +1,7 @@
 import { readDataset } from "./store.js";
 
 const hourNames = Array.from({ length: 24 }, (_, hour) => `${hour.toString().padStart(2, "0")}:00`);
+const RECENT_WINDOW_SIZE = 5;
 
 export async function buildDashboardData() {
   const { snapshots, events, state, metadata } = await readDataset();
@@ -8,7 +9,7 @@ export async function buildDashboardData() {
 }
 
 export function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
-  const activityEvents = events.filter(isArtistActivityEvent);
+  const activityEvents = annotateRecentActivity(events.filter(isArtistActivityEvent));
   return {
     state,
     totals: getTotals(snapshots, events, metadata),
@@ -74,11 +75,12 @@ function getTopArtists(events, snapshots) {
 }
 
 function getHourlyActivity(events) {
-  const hours = hourNames.map((label, hour) => ({ hour, label, changes: 0, updates: 0 }));
+  const hours = hourNames.map((label, hour) => ({ hour, label, changes: 0, movement: 0, updates: 0 }));
   for (const event of events) {
     const hour = new Date(event.observedAt).getHours();
     if (Number.isInteger(hour) && hours[hour]) {
       hours[hour].changes += getArtistActivityUnits(event);
+      hours[hour].movement += getRecentActivityUnitsFromEvent(event);
       if (event.type === "profile_changed") hours[hour].updates += 1;
     }
   }
@@ -92,6 +94,7 @@ function getDailyActivity(events) {
     if (!day) continue;
     const record = days.get(day) ?? { date: day, changes: 0, updates: 0 };
     record.changes += getArtistActivityUnits(event);
+    record.movement = (record.movement ?? 0) + getRecentActivityUnitsFromEvent(event);
     if (event.type === "profile_changed") record.updates += 1;
     days.set(day, record);
   }
@@ -117,4 +120,37 @@ function getArtistActivityUnits(event) {
   if (event.type === "initial_observation") return 0;
   if (!Array.isArray(event.added)) return event.type === "profile_changed" ? 1 : 0;
   return event.added.length;
+}
+
+function annotateRecentActivity(events) {
+  let previousArtists = [];
+  return events.map((event) => {
+    const recentActivityUnits = getRecentActivityUnits(event, previousArtists);
+    if (Array.isArray(event.artists) && event.artists.length) previousArtists = event.artists;
+    return { ...event, recentActivityUnits };
+  });
+}
+
+function getRecentActivityUnits(event, previousArtists = []) {
+  if (event.type !== "profile_changed") return 0;
+  const currentTop = (event.artists ?? []).slice(0, RECENT_WINDOW_SIZE);
+  if (!currentTop.length) return event.topArtist ? 1 : 0;
+
+  const previousRank = new Map();
+  previousArtists.forEach((artist, index) => previousRank.set(artistKey(artist), index));
+
+  let units = 0;
+  for (let index = 0; index < currentTop.length; index += 1) {
+    const previousIndex = previousRank.get(artistKey(currentTop[index]));
+    if (previousIndex === undefined || previousIndex > index) units += 1;
+  }
+  return units;
+}
+
+function getRecentActivityUnitsFromEvent(event) {
+  return Number.isFinite(event.recentActivityUnits) ? event.recentActivityUnits : getArtistActivityUnits(event);
+}
+
+function artistKey(artist) {
+  return artist?.id || artist?.url || artist?.name || "";
 }

@@ -184,6 +184,12 @@ SPOTIFY_TRACKER_MIN_MS=55000 SPOTIFY_TRACKER_MAX_MS=95000 npm run collect
 
 On GitHub Actions the collector runs once per workflow execution, scheduled every 5 minutes.
 
+The collector renders the public Spotify pages with Chrome. The default render budget is 15 seconds per page, and pages are rendered in parallel with separate browser profiles. If Spotify gets slow, you can raise it:
+
+```bash
+SPOTIFY_TRACKER_RENDER_BUDGET_MS=25000 npm run collect
+```
+
 ## Snapshot Retention
 
 Events are kept forever because they are the useful activity history. To keep Supabase tidy, the collector deletes unchanged snapshots older than 10 days after each successful run. Changed snapshots, events, and current state are kept.

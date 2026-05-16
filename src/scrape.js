@@ -7,7 +7,7 @@ import * as cheerio from "cheerio";
 import { config } from "./config.js";
 
 export async function scrapeRecentlyPlayedArtists({ url = config.recentlyPlayedArtistsUrl } = {}) {
-  const html = await renderPublicPage(url);
+  const html = await renderPublicPage(url, "recent-artists");
   const artists = extractArtists(html);
 
   if (!artists.length) {
@@ -22,7 +22,7 @@ export async function scrapeRecentlyPlayedArtists({ url = config.recentlyPlayedA
 }
 
 export async function scrapeProfileStats({ url = config.profileUrl } = {}) {
-  const html = await renderPublicPage(url);
+  const html = await renderPublicPage(url, "profile-stats");
   const profileStats = extractProfileStats(html);
 
   return {
@@ -32,11 +32,15 @@ export async function scrapeProfileStats({ url = config.profileUrl } = {}) {
 }
 
 export async function scrapeSpotifyProfile() {
-  const recent = await scrapeRecentlyPlayedArtists();
-  const profile = await scrapeProfileStats();
+  const [recent, profile, followers, following] = await Promise.all([
+    scrapeRecentlyPlayedArtists(),
+    scrapeProfileStats(),
+    scrapeProfileUsers("followers"),
+    scrapeProfileUsers("following"),
+  ]);
   const followerLists = {
-    followers: await scrapeProfileUsers("followers", profile.profileStats.followers),
-    following: await scrapeProfileUsers("following", profile.profileStats.following),
+    followers: withExpectedCount(followers, profile.profileStats.followers),
+    following: withExpectedCount(following, profile.profileStats.following),
   };
 
   return {
@@ -49,7 +53,7 @@ export async function scrapeSpotifyProfile() {
 
 export async function scrapeProfileUsers(kind, expectedCount = null) {
   const url = `${config.profileUrl.replace(/\/$/, "")}/${kind}`;
-  const html = await renderPublicPage(url);
+  const html = await renderPublicPage(url, `profile-${kind}`);
   const users = extractProfileUsers(html, kind);
   const loaded = users.length > 0 || expectedCount === 0;
 
@@ -61,14 +65,22 @@ export async function scrapeProfileUsers(kind, expectedCount = null) {
   };
 }
 
-async function renderPublicPage(url) {
+function withExpectedCount(list, expectedCount) {
+  return {
+    ...list,
+    expectedCount,
+    loaded: list.users.length > 0 || expectedCount === 0,
+  };
+}
+
+async function renderPublicPage(url, profileKey = "default") {
   const browserPath = findLocalBrowser();
   if (!browserPath) {
     throw new Error("No local Chrome or Edge executable found for public page rendering.");
   }
 
   const isWindowsBrowser = /\.exe$/i.test(browserPath);
-  const profileDir = await createBrowserProfileDir(isWindowsBrowser);
+  const profileDir = await createBrowserProfileDir(isWindowsBrowser, profileKey);
 
   return dumpDom(
     browserPath,
@@ -81,7 +93,7 @@ async function renderPublicPage(url) {
       "--no-first-run",
       "--no-default-browser-check",
       `--user-data-dir=${profileDir}`,
-      "--virtual-time-budget=25000",
+      `--virtual-time-budget=${config.renderBudgetMs}`,
       "--dump-dom",
       url,
     ],
@@ -125,11 +137,15 @@ function browserRuntimeFlags(isWindowsBrowser) {
   return ["--no-sandbox", "--disable-dev-shm-usage"];
 }
 
-async function createBrowserProfileDir(isWindowsBrowser) {
+async function createBrowserProfileDir(isWindowsBrowser, profileKey) {
   const baseDir = isWindowsBrowser ? findWindowsTempDir() : tmpdir();
-  const profileDir = join(baseDir, "spotify-tracker-browser-profile");
+  const profileDir = join(baseDir, `spotify-tracker-browser-profile-${slugify(profileKey)}`);
   await mkdir(profileDir, { recursive: true });
   return isWindowsBrowser ? wslPathToWindowsPath(profileDir) : profileDir;
+}
+
+function slugify(value) {
+  return String(value).replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "default";
 }
 
 function findWindowsTempDir() {

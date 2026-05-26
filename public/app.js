@@ -195,12 +195,26 @@ function renderMetrics(data) {
   setText("activeDaysMeta", data.availableDays[0] ? `latest ${formatDayLabel(data.availableDays[0])}` : "recorded");
   setText("lastCheckMeta", data.state.lastStatus === "error" ? "needs attention" : "collector healthy");
   setText("currentTopMeta", data.currentArtists[1] ? `ahead of ${data.currentArtists[1].name}` : "latest profile rank");
+  renderHeroVisual(data.currentArtists);
   setText(
     "pageSummary",
     data.totals.lastObservedAt
       ? `${number.format(data.currentArtists.length)} visible artists, updated ${timeAgo(data.totals.lastObservedAt)}`
       : "Waiting for collector data",
   );
+}
+
+function renderHeroVisual(artists = []) {
+  const [topArtist] = artists;
+  setText("heroArtist", topArtist?.name ?? "Waiting");
+  byId("coverStack").innerHTML = artists
+    .slice(0, 4)
+    .map((artist, index) =>
+      artist.imageUrl
+        ? `<img class="cover cover-${index + 1}" src="${escapeHtml(artist.imageUrl)}" alt="">`
+        : `<div class="cover cover-${index + 1}">${escapeHtml(initials(artist.name))}</div>`,
+    )
+    .join("");
 }
 
 function renderControls(data) {

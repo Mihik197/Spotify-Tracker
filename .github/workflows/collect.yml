@@ -1,9 +1,13 @@
 name: Collect Spotify Profile
+run-name: Collect Spotify Profile
 
 on:
   workflow_dispatch:
   repository_dispatch:
     types: [spotify-tracker-collect]
+
+permissions:
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

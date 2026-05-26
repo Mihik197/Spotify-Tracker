@@ -1,6 +1,6 @@
 const config = window.SPOTIFY_TRACKER_CONFIG ?? {};
 let dashboard = null;
-let selectedDay = "overall";
+let selectedDay = null;
 let selectedSocialList = "followers";
 let selectedBucketMinutes = 15;
 const RECENT_WINDOW_SIZE = 5;
@@ -219,15 +219,20 @@ function renderHeroVisual(artists = []) {
 
 function renderControls(data) {
   const select = byId("daySelect");
-  const previous = selectedDay;
   select.innerHTML = [
     `<option value="overall">Overall history</option>`,
     ...data.availableDays.map((day) => `<option value="${day}">${escapeHtml(formatDayLabel(day))}</option>`),
   ].join("");
-  selectedDay = data.availableDays.includes(previous) || previous === "overall" ? previous : "overall";
+  selectedDay = resolveSelectedDay(data);
   select.value = selectedDay;
   byId("overallView").classList.toggle("active", selectedDay === "overall");
   byId("bucketSelect").value = String(selectedBucketMinutes);
+}
+
+function resolveSelectedDay(data) {
+  if (selectedDay === "overall" || data.availableDays.includes(selectedDay)) return selectedDay;
+  const today = toLocalDateKey(new Date().toISOString());
+  return data.availableDays.includes(today) ? today : data.availableDays[0] ?? "overall";
 }
 
 function renderCurrentArtists(artists) {

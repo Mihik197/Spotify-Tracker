@@ -3,8 +3,6 @@ run-name: Collect Spotify Profile
 
 on:
   workflow_dispatch:
-  repository_dispatch:
-    types: [spotify-tracker-collect]
 
 permissions:
   contents: read

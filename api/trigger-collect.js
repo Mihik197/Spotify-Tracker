@@ -7,6 +7,7 @@ export default async function handler(request, response) {
   const owner = process.env.GITHUB_OWNER;
   const repo = process.env.GITHUB_REPO;
   const token = process.env.GITHUB_DISPATCH_TOKEN;
+  const workflowId = process.env.GITHUB_WORKFLOW_ID || "collect.yml";
   const ref = process.env.GITHUB_WORKFLOW_REF || "main";
 
   if (!owner || !repo || !token) {
@@ -16,11 +17,11 @@ export default async function handler(request, response) {
     return;
   }
 
-  const dispatch = await dispatchRepositoryEvent({ owner, repo, token, ref });
+  const dispatch = await dispatchWorkflow({ owner, repo, token, workflowId, ref });
 
   if (!dispatch.ok) {
     response.status(dispatch.status).json({
-      error: "GitHub repository dispatch failed",
+      error: "GitHub workflow dispatch failed",
       details: dispatch.details,
       attempts: dispatch.attempts,
     });
@@ -29,15 +30,15 @@ export default async function handler(request, response) {
 
   response.status(202).json({
     ok: true,
-    eventType: "spotify-tracker-collect",
+    workflow: workflowId,
     ref,
     attempts: dispatch.attempts,
     triggeredAt: new Date().toISOString(),
   });
 }
 
-async function dispatchRepositoryEvent({ owner, repo, token, ref }) {
-  const url = `https://api.github.com/repos/${owner}/${repo}/dispatches`;
+async function dispatchWorkflow({ owner, repo, token, workflowId, ref }) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`;
   const options = {
     method: "POST",
     headers: {
@@ -46,10 +47,7 @@ async function dispatchRepositoryEvent({ owner, repo, token, ref }) {
       "content-type": "application/json",
       "x-github-api-version": "2022-11-28",
     },
-    body: JSON.stringify({
-      event_type: "spotify-tracker-collect",
-      client_payload: { ref, source: "cron" },
-    }),
+    body: JSON.stringify({ ref }),
   };
 
   let lastError = null;

@@ -18,6 +18,8 @@ const formatDay = new Intl.DateTimeFormat(undefined, {
 });
 const number = new Intl.NumberFormat();
 
+renderSourceLinks();
+
 async function loadDashboard() {
   if (config.supabaseUrl && config.supabaseAnonKey) return loadSupabaseDashboard();
 
@@ -202,6 +204,20 @@ function byId(id) {
 
 function setText(id, value) {
   byId(id).textContent = value;
+}
+
+function renderSourceLinks() {
+  setSourceLink("spotifyProfileLink", config.spotifyProfileUrl);
+  setSourceLink("spotifyRecentLink", config.spotifyRecentlyPlayedArtistsUrl);
+}
+
+function setSourceLink(id, url) {
+  const link = byId(id);
+  if (!url) {
+    link.hidden = true;
+    return;
+  }
+  link.href = url;
 }
 
 function timeAgo(iso) {

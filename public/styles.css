@@ -221,6 +221,33 @@ h2 {
   display: flex;
   align-items: start;
   justify-content: end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.source-links {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.source-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--inset-line);
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.source-links a:hover {
+  background: var(--surface-hover);
+  color: var(--green);
 }
 
 .status {

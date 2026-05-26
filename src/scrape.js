@@ -222,9 +222,16 @@ function extractProfileUsers(html, kind) {
     const id = href.match(/\/user\/([^/?#]+)/)?.[1];
     if (!id || seen.has(id) || id === getProfileUserId(config.profileUrl)) return;
 
-    const title = link.find("[title]").first().attr("title")?.trim() || link.attr("title")?.trim();
-    const text = link.text().replace(/\s+/g, " ").trim();
-    const name = title || text;
+    const name = pickProfileUserName(
+      [
+        link.find("[title]").first().attr("title"),
+        link.attr("title"),
+        link.attr("aria-label"),
+        link.find("img").first().attr("alt"),
+        link.text(),
+      ],
+      id,
+    );
     if (!name) return;
 
     const imageUrl =
@@ -244,6 +251,18 @@ function extractProfileUsers(html, kind) {
   });
 
   return users;
+}
+
+function pickProfileUserName(candidates, id) {
+  for (const candidate of candidates) {
+    const name = String(candidate ?? "").replace(/\s+/g, " ").trim();
+    if (name && !isProfileUserIdName(name, id)) return name;
+  }
+  return id;
+}
+
+function isProfileUserIdName(name, id) {
+  return name === id || /^31[a-z0-9]{20,}$/i.test(name);
 }
 
 function getProfileUserId(url) {

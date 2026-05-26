@@ -10,12 +10,17 @@ export async function buildDashboardData() {
 
 export function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
   const activityEvents = annotateRecentActivity(events.filter(isArtistActivityEvent));
+  const followerLists = hydrateFollowerLists(
+    state.lastFollowerLists ?? snapshots.at(-1)?.followerLists ?? {},
+    snapshots,
+    events,
+  );
   return {
     state,
     totals: getTotals(snapshots, events, metadata),
     currentArtists: state.lastArtists ?? snapshots.at(-1)?.artists ?? [],
     profileStats: state.lastProfileStats ?? snapshots.at(-1)?.profileStats ?? {},
-    followerLists: state.lastFollowerLists ?? snapshots.at(-1)?.followerLists ?? {},
+    followerLists,
     topArtists: getTopArtists(activityEvents, snapshots),
     hourlyActivity: getHourlyActivity(activityEvents),
     dailyActivity: getDailyActivity(activityEvents),
@@ -25,6 +30,46 @@ export function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
     snapshots,
     events,
   };
+}
+
+function hydrateFollowerLists(followerLists = {}, snapshots = [], events = []) {
+  const displayNames = getKnownProfileUserNames(snapshots, events);
+  return Object.fromEntries(
+    Object.entries(followerLists).map(([kind, list]) => [
+      kind,
+      {
+        ...list,
+        users: (list.users ?? []).map((user) => hydrateProfileUser(user, displayNames)),
+      },
+    ]),
+  );
+}
+
+function getKnownProfileUserNames(snapshots = [], events = []) {
+  const names = new Map();
+  const remember = (user) => {
+    const key = profileUserKey(user);
+    if (!key || !user?.name || isProfileUserIdName(user.name, user)) return;
+    names.set(key, user.name);
+  };
+
+  for (const snapshot of snapshots) {
+    for (const list of Object.values(snapshot.followerLists ?? {})) {
+      for (const user of list?.users ?? []) remember(user);
+    }
+  }
+  for (const event of events) {
+    for (const user of event.addedUsers ?? []) remember(user);
+    for (const user of event.removedUsers ?? []) remember(user);
+  }
+  return names;
+}
+
+function hydrateProfileUser(user, displayNames) {
+  const key = profileUserKey(user);
+  if (!key || !isProfileUserIdName(user?.name, user)) return user;
+  const name = displayNames.get(key);
+  return name ? { ...user, name } : user;
 }
 
 function getTotals(snapshots, events, metadata = {}) {
@@ -114,6 +159,15 @@ function isArtistActivityEvent(event) {
 
 function isProfileUserEvent(event) {
   return event.type === "profile_followers_changed" || event.type === "profile_following_changed";
+}
+
+function profileUserKey(user) {
+  return user?.id || String(user?.url ?? "").match(/\/user\/([^/?#]+)/)?.[1] || user?.name || "";
+}
+
+function isProfileUserIdName(name, user) {
+  const key = profileUserKey(user);
+  return name === key || /^31[a-z0-9]{20,}$/i.test(String(name));
 }
 
 function getArtistActivityUnits(event) {

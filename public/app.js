@@ -455,6 +455,7 @@ function renderTimeline(events) {
 
 function renderView() {
   if (!dashboard) return;
+  selectedDay = resolveSelectedDay(dashboard);
   const scopedEvents =
     selectedDay === "overall"
       ? dashboard.events

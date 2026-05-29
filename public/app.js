@@ -4,6 +4,7 @@ let selectedDay = null;
 let selectedSocialList = "followers";
 let selectedBucketMinutes = 15;
 const RECENT_WINDOW_SIZE = 5;
+const DASHBOARD_REFRESH_MS = 15 * 60_000;
 
 const formatTime = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -30,14 +31,19 @@ async function loadDashboard() {
 
 async function loadSupabaseDashboard() {
   const [snapshotsDesc, events, stateRows, snapshotCount, changeCount, firstSnapshots] = await Promise.all([
-    supabaseGet("spotify_snapshots?select=*&order=observed_at.desc&limit=5000"),
-    supabaseGetAll("spotify_events?select=*&order=observed_at.asc"),
+    supabaseGet("spotify_snapshots?select=observed_at,changed&order=observed_at.desc&limit=5000"),
+    supabaseGetAll(
+      "spotify_events?select=observed_at,type,top_artist,artists,added,removed,count_changes,follower_list_kind,added_users,removed_users&order=observed_at.asc",
+    ),
     supabaseGet("spotify_tracker_state?key=eq.collector&select=value&limit=1"),
     supabaseCount("spotify_snapshots"),
     supabaseCount("spotify_snapshots?changed=eq.true"),
     supabaseGet("spotify_snapshots?select=observed_at&order=observed_at.asc&limit=1"),
   ]);
   const state = stateRows[0]?.value ?? {};
+  const profileNameSnapshots = needsProfileNameHistory(state.lastFollowerLists)
+    ? await supabaseGet("spotify_snapshots?select=follower_lists&order=observed_at.desc&limit=20")
+    : [];
 
   return buildAnalytics(
     snapshotsDesc.map(fromSnapshotRow).reverse(),
@@ -48,6 +54,7 @@ async function loadSupabaseDashboard() {
       changeCount,
       firstObservedAt: firstSnapshots[0]?.observed_at ?? null,
       lastObservedAt: state.lastCheckedAt ?? snapshotsDesc[0]?.observed_at ?? null,
+      profileNameSnapshots: profileNameSnapshots.map(fromSnapshotRow),
     },
   );
 }
@@ -129,7 +136,7 @@ function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
   const days = getAvailableDays(activityEvents, snapshots);
   const followerLists = hydrateFollowerLists(
     state.lastFollowerLists ?? snapshots.at(-1)?.followerLists ?? {},
-    snapshots,
+    metadata.profileNameSnapshots?.length ? metadata.profileNameSnapshots : snapshots,
     events,
   );
   return {
@@ -196,6 +203,12 @@ function hydrateProfileUser(user, displayNames) {
   if (!key || !isProfileUserIdName(user?.name, user)) return user;
   const name = displayNames.get(key);
   return name ? { ...user, name } : user;
+}
+
+function needsProfileNameHistory(followerLists = {}) {
+  return Object.values(followerLists).some((list) =>
+    (list?.users ?? []).some((user) => isProfileUserIdName(user?.name, user)),
+  );
 }
 
 function byId(id) {
@@ -813,4 +826,6 @@ byId("followingView").addEventListener("click", () => {
 });
 
 render();
-setInterval(render, 30_000);
+setInterval(() => {
+  if (!document.hidden) render();
+}, DASHBOARD_REFRESH_MS);

@@ -12,7 +12,7 @@ export function buildAnalytics(snapshots, events, state = {}, metadata = {}) {
   const activityEvents = annotateRecentActivity(events.filter(isArtistActivityEvent));
   const followerLists = hydrateFollowerLists(
     state.lastFollowerLists ?? snapshots.at(-1)?.followerLists ?? {},
-    snapshots,
+    metadata.profileNameSnapshots?.length ? metadata.profileNameSnapshots : snapshots,
     events,
   );
   return {

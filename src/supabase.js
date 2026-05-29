@@ -108,13 +108,18 @@ export async function pruneUnchangedSupabaseSnapshots({ olderThan }) {
 
 export async function readSupabaseDataset() {
   const [snapshotsDesc, events, state, snapshotCount, changeCount, firstSnapshot] = await Promise.all([
-    supabaseRequest("spotify_snapshots?select=*&order=observed_at.desc&limit=5000"),
-    readSupabaseRows("spotify_events?select=*&order=observed_at.asc"),
+    supabaseRequest("spotify_snapshots?select=observed_at,changed&order=observed_at.desc&limit=5000"),
+    readSupabaseRows(
+      "spotify_events?select=observed_at,type,top_artist,artists,added,removed,count_changes,follower_list_kind,added_users,removed_users&order=observed_at.asc",
+    ),
     readSupabaseState(),
     readSupabaseCount("spotify_snapshots"),
     readSupabaseCount("spotify_snapshots?changed=eq.true"),
     supabaseRequest("spotify_snapshots?select=observed_at&order=observed_at.asc&limit=1"),
   ]);
+  const profileNameSnapshots = needsProfileNameHistory(state.lastFollowerLists)
+    ? await supabaseRequest("spotify_snapshots?select=follower_lists&order=observed_at.desc&limit=20")
+    : [];
 
   return {
     snapshots: snapshotsDesc.map(fromSnapshotRow).reverse(),
@@ -125,6 +130,7 @@ export async function readSupabaseDataset() {
       changeCount,
       firstObservedAt: firstSnapshot[0]?.observed_at ?? null,
       lastObservedAt: state.lastCheckedAt ?? snapshotsDesc[0]?.observed_at ?? null,
+      profileNameSnapshots: profileNameSnapshots.map(fromSnapshotRow),
     },
   };
 }
@@ -192,4 +198,19 @@ function fromEventRow(row) {
     addedUsers: row.added_users ?? [],
     removedUsers: row.removed_users ?? [],
   };
+}
+
+function needsProfileNameHistory(followerLists = {}) {
+  return Object.values(followerLists).some((list) =>
+    (list?.users ?? []).some((user) => isProfileUserIdName(user?.name, user)),
+  );
+}
+
+function profileUserKey(user) {
+  return user?.id || String(user?.url ?? "").match(/\/user\/([^/?#]+)/)?.[1] || user?.name || "";
+}
+
+function isProfileUserIdName(name, user) {
+  const key = profileUserKey(user);
+  return name === key || /^31[a-z0-9]{20,}$/i.test(String(name));
 }

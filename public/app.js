@@ -220,17 +220,25 @@ function setText(id, value) {
 }
 
 function renderSourceLinks() {
-  setSourceLink("spotifyProfileLink", config.spotifyProfileUrl);
-  setSourceLink("spotifyRecentLink", config.spotifyRecentlyPlayedArtistsUrl);
+  const profileUrl = config.spotifyProfileUrl;
+  const recentUrl = config.spotifyRecentlyPlayedArtistsUrl || withRecentlyPlayedArtists(profileUrl);
+  setSourceLink("spotifyProfileLink", profileUrl);
+  setSourceLink("spotifyRecentLink", recentUrl);
 }
 
 function setSourceLink(id, url) {
   const link = byId(id);
   if (!url) {
     link.hidden = true;
+    link.removeAttribute("href");
     return;
   }
+  link.hidden = false;
   link.href = url;
+}
+
+function withRecentlyPlayedArtists(profileUrl) {
+  return profileUrl ? `${profileUrl.replace(/\/$/, "")}/recently-played-artists` : "";
 }
 
 function timeAgo(iso) {

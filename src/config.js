@@ -1,13 +1,8 @@
 export const config = {
-  profileUrl:
-    process.env.SPOTIFY_PROFILE_URL ??
-    "https://open.spotify.com/user/31c2zzrpetowojd6qxjfw2ld42sy",
+  profileUrl: process.env.SPOTIFY_PROFILE_URL ?? "",
   recentlyPlayedArtistsUrl:
     process.env.SPOTIFY_RECENTLY_PLAYED_ARTISTS_URL ??
-    withRecentlyPlayedArtists(
-      process.env.SPOTIFY_PROFILE_URL ??
-        "https://open.spotify.com/user/31c2zzrpetowojd6qxjfw2ld42sy",
-    ),
+    (process.env.SPOTIFY_PROFILE_URL ? withRecentlyPlayedArtists(process.env.SPOTIFY_PROFILE_URL) : ""),
   dataDir: new URL("../data/", import.meta.url),
   serverPort: Number(process.env.PORT ?? 4387),
   snapshotRetentionDays: Number(process.env.SPOTIFY_TRACKER_SNAPSHOT_RETENTION_DAYS ?? 10),

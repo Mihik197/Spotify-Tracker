@@ -7,6 +7,7 @@ import * as cheerio from "cheerio";
 import { config } from "./config.js";
 
 export async function scrapeRecentlyPlayedArtists({ url = config.recentlyPlayedArtistsUrl } = {}) {
+  requireConfiguredUrl(url, "SPOTIFY_RECENTLY_PLAYED_ARTISTS_URL or SPOTIFY_PROFILE_URL");
   const html = await renderPublicPage(url, "recent-artists");
   const artists = extractArtists(html);
 
@@ -22,6 +23,7 @@ export async function scrapeRecentlyPlayedArtists({ url = config.recentlyPlayedA
 }
 
 export async function scrapeProfileStats({ url = config.profileUrl } = {}) {
+  requireConfiguredUrl(url, "SPOTIFY_PROFILE_URL");
   const html = await renderPublicPage(url, "profile-stats");
   const profileStats = extractProfileStats(html);
 
@@ -52,6 +54,7 @@ export async function scrapeSpotifyProfile() {
 }
 
 export async function scrapeProfileUsers(kind, expectedCount = null) {
+  requireConfiguredUrl(config.profileUrl, "SPOTIFY_PROFILE_URL");
   const url = `${config.profileUrl.replace(/\/$/, "")}/${kind}`;
   const html = await renderPublicPage(url, `profile-${kind}`);
   const users = extractProfileUsers(html, kind);
@@ -71,6 +74,10 @@ function withExpectedCount(list, expectedCount) {
     expectedCount,
     loaded: list.users.length > 0 || expectedCount === 0,
   };
+}
+
+function requireConfiguredUrl(url, envName) {
+  if (!url) throw new Error(`${envName} must be configured.`);
 }
 
 async function renderPublicPage(url, profileKey = "default") {

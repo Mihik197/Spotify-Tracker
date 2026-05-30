@@ -33,6 +33,5 @@ jobs:
         run: npm run sample
         env:
           SPOTIFY_PROFILE_URL: ${{ secrets.SPOTIFY_PROFILE_URL }}
-          SPOTIFY_RECENTLY_PLAYED_ARTISTS_URL: ${{ secrets.SPOTIFY_RECENTLY_PLAYED_ARTISTS_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

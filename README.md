@@ -63,7 +63,6 @@ In GitHub:
 
 ```text
 SPOTIFY_PROFILE_URL=https://open.spotify.com/user/your-user-id
-SPOTIFY_RECENTLY_PLAYED_ARTISTS_URL=https://open.spotify.com/user/your-user-id/recently-played-artists
 SUPABASE_URL=your Supabase project URL
 SUPABASE_SERVICE_ROLE_KEY=your Supabase service_role key
 ```
@@ -86,6 +85,7 @@ If GitHub's native scheduler does not fire reliably, use the Vercel trigger fall
 ```text
 SUPABASE_URL=your Supabase project URL
 SUPABASE_ANON_KEY=your Supabase anon public key
+SPOTIFY_PROFILE_URL=https://open.spotify.com/user/your-user-id
 ```
 
 4. Build command: `npm run build:web`
